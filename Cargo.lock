@@ -11070,16 +11070,22 @@ dependencies = [
  "clap",
  "eyre",
  "futures-util",
+ "prost",
  "reth",
+ "reth-cli-util",
  "reth-ethereum-cli",
  "reth-exex",
  "reth-node-ethereum",
  "reth-rpc-server-types",
  "reth-tracing",
+ "rustls",
  "tempo-chainspec",
  "tempo-consensus",
  "tempo-evm",
  "tempo-node",
+ "tokio",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -11657,8 +11663,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fec7c61a0695dc1887c1b53952990f3ad2e3a31453e1f49f10e75424943a93ec"
 dependencies = [
  "async-trait",
+ "axum",
  "base64 0.22.1",
  "bytes",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
@@ -11667,6 +11675,7 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
+ "socket2 0.6.2",
  "sync_wrapper",
  "tokio",
  "tokio-stream",
@@ -11674,6 +11683,18 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tonic-build"
+version = "0.14.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1882ac3bf5ef12877d7ed57aad87e75154c11931c2ba7e6cde5e22d63522c734"
+dependencies = [
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]

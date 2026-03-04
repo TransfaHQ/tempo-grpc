@@ -10,6 +10,9 @@ use tempo_consensus::TempoConsensus;
 use tempo_evm::TempoEvmConfig;
 use reth_ethereum_cli::Cli;
 
+mod exex;
+use exex::ExEx;
+
 #[derive(Debug, Clone, clap::Args)]
 struct TempoArgs {
     /// Follow this specific RPC node for block hashes.
@@ -22,6 +25,12 @@ struct TempoArgs {
 }
 
 fn main() -> eyre::Result<()> {
+    rustls::crypto::ring::default_provider()
+            .install_default()
+            .expect("Failed to install default rustls crypto provider");
+        
+    reth_cli_util::sigsegv_handler::install();
+
     let cli = Cli::<TempoChainSpecParser, TempoArgs, DefaultRpcModuleValidator, NoSubCmd>::parse();
     let components =
         |spec: Arc<TempoChainSpec>| (TempoEvmConfig::new(spec.clone()), TempoConsensus::new(spec));
@@ -39,6 +48,10 @@ fn main() -> eyre::Result<()> {
                     builder.config_mut().debug.rpc_consensus_url = follow_url;
                 }
                 builder
+            })
+            .install_exex("grpc-exex", |ctx| async move {
+                let exex = ExEx::new(ctx);
+                Ok(exex.start())
             })
             .launch_with_debug_capabilities()
             .await

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
 reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
 reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
@@ -18,3 +19,10 @@ reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1
 clap = { version = "4.5.57", features = ["derive", "env"] }
 eyre = "0.6" # Easy error handling
 futures-util = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = "1.50.0"
+prost = "0.14.3"
+tonic = "0.14.5"
+
+[build-dependencies]
+tonic-build = "0.14.5"
