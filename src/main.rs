@@ -1,0 +1,49 @@
+use std::sync::Arc;
+use clap::Parser;
+
+use eyre::Context;
+use reth::{builder::WithLaunchContext, cli::NoSubCmd};
+use tempo_node::{node::TempoNode, TempoNodeArgs};
+use tempo_chainspec::spec::{TempoChainSpec, TempoChainSpecParser};
+use reth_rpc_server_types::DefaultRpcModuleValidator;
+use tempo_consensus::TempoConsensus;
+use tempo_evm::TempoEvmConfig;
+use reth_ethereum_cli::Cli;
+
+#[derive(Debug, Clone, clap::Args)]
+struct TempoArgs {
+    /// Follow this specific RPC node for block hashes.
+    /// If provided without a value, defaults to the RPC URL for the selected chain.
+    #[arg(long, value_name = "URL", default_missing_value = "auto", num_args(0..=1), env = "TEMPO_FOLLOW")]
+    pub follow: Option<String>,
+
+    #[command(flatten)]
+    pub node_args: TempoNodeArgs,
+}
+
+fn main() -> eyre::Result<()> {
+    let cli = Cli::<TempoChainSpecParser, TempoArgs, DefaultRpcModuleValidator, NoSubCmd>::parse();
+    let components =
+        |spec: Arc<TempoChainSpec>| (TempoEvmConfig::new(spec.clone()), TempoConsensus::new(spec));
+    cli.run_with_components::<TempoNode>(components, async move |builder, args| {
+        let handle = builder
+            .node(TempoNode::new(&args.node_args, None))
+            .apply(|mut builder: WithLaunchContext<_>| {
+                builder.config_mut().network.discovery.enable_discv5_discovery = true;
+                if let Some(follow) = &args.follow {
+                    let follow_url = if follow == "auto" {
+                        builder.config().chain.default_follow_url().map(|s| s.to_string())
+                    } else {
+                        Some(follow.clone())
+                    };
+                    builder.config_mut().debug.rpc_consensus_url = follow_url;
+                }
+                builder
+            })
+            .launch_with_debug_capabilities()
+            .await
+            .wrap_err("failed launching execution node")?;
+
+        handle.wait_for_node_exit().await
+    })
+}

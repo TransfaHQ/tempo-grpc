@@ -1,0 +1,20 @@
+[package]
+name = "tempo-grpc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+tempo-node = { git = "https://github.com/tempoxyz/tempo.git" }
+tempo-chainspec = { git = "https://github.com/tempoxyz/tempo.git" }
+tempo-consensus = { git = "https://github.com/tempoxyz/tempo.git" }
+tempo-evm = { git = "https://github.com/tempoxyz/tempo.git" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Logging
+ 
+clap = { version = "4.5.57", features = ["derive", "env"] }
+eyre = "0.6" # Easy error handling
+futures-util = "0.3"
