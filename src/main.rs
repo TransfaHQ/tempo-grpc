@@ -12,6 +12,7 @@ use reth_ethereum_cli::Cli;
 
 mod exex;
 mod server;
+mod convert;
 use exex::ExEx;
 
 #[derive(Debug, Clone, clap::Args)]

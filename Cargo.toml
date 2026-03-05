@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+alloy-eips = { version = "1.6.1", default-features = false }
+alloy-consensus = { version = "1.6.1", default-features = false }
+alloy-primitives = { version = "1.5.4", default-features = false }
 reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
 reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
 reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
@@ -14,6 +17,7 @@ tempo-node = { git = "https://github.com/tempoxyz/tempo.git" }
 tempo-chainspec = { git = "https://github.com/tempoxyz/tempo.git" }
 tempo-consensus = { git = "https://github.com/tempoxyz/tempo.git" }
 tempo-evm = { git = "https://github.com/tempoxyz/tempo.git" }
+tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git" }
 reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Logging
  
 clap = { version = "4.5.57", features = ["derive", "env"] }
@@ -21,6 +25,7 @@ eyre = "0.6" # Easy error handling
 futures-util = "0.3"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 tokio = "1.50.0"
+tokio-stream = "0.1"
 prost = "0.14.3"
 tonic = "0.14.5"
 tonic-prost = "*"

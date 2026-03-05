@@ -11134,6 +11134,9 @@ dependencies = [
 name = "tempo-grpc"
 version = "0.1.0"
 dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
  "clap",
  "eyre",
  "futures-util",
@@ -11150,7 +11153,9 @@ dependencies = [
  "tempo-consensus",
  "tempo-evm",
  "tempo-node",
+ "tempo-primitives",
  "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
