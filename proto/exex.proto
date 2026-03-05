@@ -1,0 +1,428 @@
+
+syntax = "proto3";
+
+package exex;
+
+import "google/protobuf/empty.proto";
+
+service RemoteExEx {
+  rpc Subscribe(SubscribeRequest) returns (stream ExExNotification) {}
+}
+
+message SubscribeRequest {}
+
+message ExExNotification {
+  oneof notification {
+    ChainCommitted chain_committed = 1;
+    ChainReorged chain_reorged = 2;
+    ChainReverted chain_reverted = 3;
+  }
+}
+
+message ChainCommitted {
+  Chain new = 1;
+}
+
+message ChainReorged {
+  Chain old = 1;
+  Chain new = 2;
+}
+
+message ChainReverted {
+  Chain old = 1;
+}
+
+message Chain {
+  repeated Block blocks = 1;
+  ExecutionOutcome execution_outcome = 2;
+}
+
+message Block {
+  SealedHeader header = 1;
+  repeated Transaction body = 2;
+  repeated Header ommers = 3;
+  repeated bytes senders = 4;
+  repeated Withdrawal withdrawals = 5;
+  Requests requests = 6;
+}
+
+message Withdrawal {
+  uint64 index = 1;
+  uint64 validator_index = 2;
+  bytes address = 3;
+  uint64 amount = 4;
+}
+
+message Requests {
+  repeated DepositRequest deposits = 1;
+  repeated WithdrawalRequest withdrawals = 2;
+  repeated ConsolidationRequest consolidations = 3;
+}
+
+message DepositRequest {
+  bytes pubkey = 1;
+  bytes withdrawal_credentials = 2;
+  uint64 amount = 3;
+  bytes signature = 4;
+  uint64 index = 5;
+}
+
+message WithdrawalRequest {
+  bytes source_address = 1;
+  bytes validator_pubkey = 2;
+  uint64 amount = 3;
+}
+
+message ConsolidationRequest {
+  bytes source_address = 1;
+  bytes source_pubkey = 2;
+  bytes target_pubkey = 3;
+}
+
+message SealedHeader {
+  bytes hash = 1;
+  Header header = 2;
+}
+
+message Header {
+  bytes parent_hash = 1;
+  bytes ommers_hash = 2;
+  bytes beneficiary = 3;
+  bytes state_root = 4;
+  bytes transactions_root = 5;
+  bytes receipts_root = 6;
+  optional bytes withdrawals_root = 7;
+  bytes logs_bloom = 8;
+  bytes difficulty = 9;
+  uint64 number = 10;
+  uint64 gas_limit = 11;
+  uint64 gas_used = 12;
+  uint64 timestamp = 13;
+  bytes mix_hash = 14;
+  bytes nonce = 15;
+  optional uint64 base_fee_per_gas = 16;
+  optional uint64 blob_gas_used = 17;
+  optional uint64 excess_blob_gas = 18;
+  optional bytes parent_beacon_block_root = 19;
+  optional bytes requests_root = 24;
+  uint64 general_gas_limit = 20;
+  uint64 shared_gas_limit = 21;
+  uint64 timestamp_millis_part = 22;
+  bytes extra_data = 23;
+}
+
+message Transaction {
+  bytes hash = 1;
+  Signature signature = 2;
+  oneof transaction {
+    TransactionLegacy legacy = 3;
+    TransactionEip2930 eip2930 = 4;
+    TransactionEip1559 eip1559 = 5;
+    TransactionEip7702 eip7702 = 6;
+    TransactionTempo tempo = 7;
+  }
+}
+
+message Signature {
+  bytes r = 1;
+  bytes s = 2;
+  uint32 y_parity = 3;
+}
+
+message TransactionLegacy {
+  optional uint64 chain_id = 1;
+  uint64 nonce = 2;
+  bytes gas_price = 3;
+  bytes gas_limit = 4;
+  TxKind to = 5;
+  bytes value = 6;
+  bytes input = 7;
+}
+
+message TransactionEip2930 {
+  uint64 chain_id = 1;
+  uint64 nonce = 2;
+  bytes gas_price = 3;
+  bytes gas_limit = 4;
+  TxKind to = 5;
+  bytes value = 6;
+  repeated AccessListItem access_list = 7;
+  bytes input = 8;
+}
+
+message TransactionEip1559 {
+  uint64 chain_id = 1;
+  uint64 nonce = 2;
+  bytes gas_limit = 3;
+  bytes max_fee_per_gas = 4;
+  bytes max_priority_fee_per_gas = 5;
+  TxKind to = 6;
+  bytes value = 7;
+  repeated AccessListItem access_list = 8;
+  bytes input = 9;
+}
+
+message TransactionEip7702 {
+  uint64 chain_id = 1;
+  uint64 nonce = 2;
+  bytes gas_limit = 3;
+  bytes max_fee_per_gas = 4;
+  bytes max_priority_fee_per_gas = 5;
+  bytes to = 6;
+  bytes value = 7;
+  repeated AccessListItem access_list = 8;
+  repeated AuthorizationListItem authorization_list = 9;
+  bytes input = 10;
+}
+
+message TransactionTempo {
+  uint64 chain_id = 1;
+  bytes max_fee_per_gas = 2;
+  bytes max_priority_fee_per_gas = 3;  
+  uint64 gas_limit = 4;
+  repeated Call calls = 5;
+  repeated AccessListItem access_list = 6;
+  bytes nonce_key = 7;
+  uint64 nonce = 8;
+  optional bytes fee_token = 9;
+  Signature fee_payer_signature = 10;
+  optional uint64 valid_before = 11;
+  optional uint64 valid_after = 12;
+  optional KeyAuthorization key_authorization = 13;
+  repeated TempoAuthorization aa_authorization_list = 14;
+}
+
+message Call {
+  TxKind to = 1;
+  bytes value = 2;
+  bytes input = 3;
+}
+
+message KeyAuthorization {
+  uint64 chain_id = 1;
+  SignatureType key_type = 2;
+  bytes key_id = 3;
+  optional uint64 expiry = 4;
+  repeated TokenLimit limits = 5; 
+  PrimitiveSignature signature = 6;
+}
+
+enum SignatureType {
+  SECP256K1 = 0;
+  P256 = 1;
+  WEBAUTHN = 2;
+}
+
+message TokenLimit {
+  bytes token = 1;
+  bytes limit = 2;
+}
+
+message PrimitiveSignature {
+  oneof signature {
+    Signature secp256k1 = 1;
+    P256SignatureWithPreHash p256 = 2;
+    WebAuthSignature webauthn = 3;
+  }
+}
+
+message P256SignatureWithPreHash {
+  bytes r = 1;
+  bytes s = 2;
+  bytes pub_key_x = 3;
+  bytes pub_key_y = 4;
+  bool pre_hash = 5; 
+}
+
+message WebAuthnSignature {
+  bytes r = 1;
+  bytes s = 2;
+  bytes pub_key_x = 3;
+  bytes pub_key_y = 4;
+  bytes webauthn_data = 5; 
+}
+
+message TempoAuthorization {
+  bytes chain_id = 1;
+  bytes address = 2;
+  uint64 nonce = 3;
+  TempoSignature signature = 4;
+}
+
+message TempoSignature {
+  oneof signature {
+    PrimitiveSignature primitive = 1;
+    KeychainSignature keychain = 2;
+  }
+}
+
+message KeychainSignature {
+  bytes user_address = 1;
+  PrimitiveSignature signature = 2;
+  KeychainVersion version = 3;
+  bytes key_id = 4;
+}
+
+enum KeychainVersion {
+  V1 = 0;
+  V2 = 1;
+}
+
+message TxKind {
+  oneof kind {
+    google.protobuf.Empty create = 1;
+    bytes call = 2;
+  }
+}
+
+message AccessListItem {
+  bytes address = 1;
+  repeated bytes storage_keys = 2;
+}
+
+message AuthorizationListItem {
+  Authorization authorization = 1;
+  Signature signature = 2;
+}
+
+message Authorization {
+  bytes chain_id = 1;
+  bytes address = 2;
+  uint64 nonce = 3;
+}
+
+message ExecutionOutcome {
+  BundleState bundle = 1;
+  repeated BlockReceipts receipts = 2;
+  uint64 first_block = 3;
+  repeated Requests requests = 4;
+}
+
+message BundleState {
+  repeated BundleAccount state = 1;
+  repeated ContractBytecode contracts = 2;
+  repeated BlockReverts reverts = 3;
+  uint64 state_size = 4;
+  uint64 reverts_size = 5;
+}
+
+message BundleAccount {
+  bytes address = 1;
+  AccountInfo info = 2;
+  AccountInfo original_info = 3;
+  repeated StorageSlot storage = 4;
+  AccountStatus status = 5;
+}
+
+message AccountInfo {
+  bytes balance = 1;
+  uint64 nonce = 2;
+  bytes code_hash = 3;
+  Bytecode code = 4;
+}
+
+message StorageSlot {
+  bytes key = 1;
+  bytes previous_or_original_value = 2;
+  bytes present_value = 3;
+}
+
+enum AccountStatus {
+  LOADED_NOT_EXISTING = 0;
+  LOADED = 1;
+  LOADED_EMPTY_EIP161 = 2;
+  IN_MEMORY_CHANGE = 3;
+  CHANGED = 4;
+  DESTROYED = 5;
+  DESTROYED_CHANGED = 6;
+  DESTROYED_AGAIN = 7;
+}
+
+message ContractBytecode {
+  bytes hash = 1;
+  Bytecode bytecode = 2;
+}
+
+message Bytecode {
+  oneof bytecode {
+    LegacyAnalyzedBytecode legacy_analyzed = 1;
+    Eip7702Bytecode eip7702 = 3;
+  }
+}
+
+message LegacyAnalyzedBytecode {
+  bytes bytecode = 1;
+  uint64 original_len = 2;
+  bytes jump_table = 3;
+  uint64 jump_table_len = 4;
+}
+
+message Eip7702Bytecode {
+  bytes delegated_address = 1;
+  uint64 version = 2;
+  bytes raw = 3;
+}
+
+message BlockReverts {
+  repeated Revert reverts = 1;
+}
+
+message Revert {
+  bytes address = 1;
+  AccountInfoRevert account = 2;
+  repeated RevertToSlot storage = 3;
+  AccountStatus previous_status = 4;
+  bool wipe_storage = 5;
+}
+
+message AccountInfoRevert {
+  oneof revert {
+    google.protobuf.Empty do_nothing = 1;
+    google.protobuf.Empty delete_it = 2;
+    AccountInfo revert_to = 3;
+  }
+}
+
+message RevertToSlot {
+  bytes key = 1;
+  oneof revert {
+    bytes some = 2;
+    google.protobuf.Empty destroyed = 3;
+  }
+}
+
+message BlockReceipts {
+  repeated Receipt receipts = 1;
+}
+
+message Receipt {
+  oneof receipt {
+    google.protobuf.Empty empty = 1;
+    NonEmptyReceipt non_empty = 2;
+  }
+}
+
+message NonEmptyReceipt {
+  TxType tx_type = 1;
+  bool success = 2;
+  uint64 cumulative_gas_used = 3;
+  repeated Log logs = 4;
+}
+
+enum TxType {
+  LEGACY = 0;
+  EIP2930 = 1;
+  EIP1559 = 2;
+  EIP7702 = 3;
+  TEMPO = 4;
+}
+
+message Log {
+  bytes address = 1;
+  LogData data = 2;
+}
+
+message LogData {
+  repeated bytes topics = 1;
+  bytes data = 2;
+}

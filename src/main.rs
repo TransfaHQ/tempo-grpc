@@ -11,6 +11,7 @@ use tempo_evm::TempoEvmConfig;
 use reth_ethereum_cli::Cli;
 
 mod exex;
+mod server;
 use exex::ExEx;
 
 #[derive(Debug, Clone, clap::Args)]
