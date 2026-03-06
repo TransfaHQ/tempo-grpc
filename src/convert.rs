@@ -1,12 +1,15 @@
-use crate::server::proto::{self, NonEmptyReceipt};
+use crate::server::proto;
 use alloy_consensus::Signed;
-use alloy_primitives::{Address, BlockHash, Bloom, TxHash, B256, B64, U256};
-use eyre::OptionExt;
-use reth::{core::primitives::AlloyBlockHeader, rpc::types::TransactionTrait};
+use alloy_primitives::{Address, B64, B256, BlockHash, Bloom, Bytes, TxHash, U256};
+use eyre::{OptionExt, eyre};
 use std::{collections::BTreeMap, sync::Arc};
 use tempo_primitives::{
-    transaction::{KeychainVersion, PrimitiveSignature},
-    Block, TempoPrimitives, TempoSignature, TempoTxEnvelope,
+    AASigned, Block, TempoPrimitives, TempoSignature, TempoTxEnvelope,
+    transaction::{
+        Call, KeyAuthorization, KeychainSignature, KeychainVersion, PrimitiveSignature,
+        TempoSignedAuthorization, TokenLimit,
+        tt_signature::{P256SignatureWithPreHash, WebAuthnSignature},
+    },
 };
 
 impl TryFrom<&reth_exex::ExExNotification<TempoPrimitives>> for proto::ExExNotification {
@@ -209,7 +212,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                 Ok(Self {
                     transaction: Some(transaction),
                     hash,
-                    signature: Some(signature),
+                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
                 })
             }
             TempoTxEnvelope::Eip2930(signed) => {
@@ -243,7 +246,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                 Ok(Self {
                     transaction: Some(transaction),
                     hash,
-                    signature: Some(signature),
+                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
                 })
             }
             TempoTxEnvelope::Eip1559(signed) => {
@@ -279,7 +282,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                 Ok(Self {
                     transaction: Some(transaction),
                     hash,
-                    signature: Some(signature),
+                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
                 })
             }
             TempoTxEnvelope::Eip7702(signed) => {
@@ -333,7 +336,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                 Ok(Self {
                     transaction: Some(transaction),
                     hash,
-                    signature: Some(signature),
+                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
                 })
             }
             TempoTxEnvelope::AA(signed) => {
@@ -351,32 +354,34 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                         .iter()
                         .map(|call| proto::Call {
                             to: Some((&call.to).into()),
-                            value: call.value.to_le_bytes().to_vec(),
+                            value: call.value.to_le_bytes::<32>().to_vec(),
                             input: call.input.to_vec(),
                         })
                         .collect(),
                     access_list: tx.access_list.iter().map(Into::into).collect(),
-                    nonce_key: tx.nonce_key.to_le_bytes().to_vec(),
+                    nonce_key: tx.nonce_key.to_le_bytes::<32>().to_vec(),
                     nonce: tx.nonce,
                     fee_token: tx.fee_token.map(|ft| ft.to_vec()),
                     fee_payer_signature: tx.fee_payer_signature.map(|sig| (&sig).into()),
                     valid_before: tx.valid_before,
                     valid_after: tx.valid_before,
-                    key_authorization: tx.key_authorization.map(|ka| proto::KeyAuthorization {
-                        chain_id: ka.chain_id,
-                        key_type: (ka.key_type as u8).into(),
-                        key_id: ka.key_id.to_vec(),
-                        expiry: ka.expiry,
-                        limits: ka.limits.map(|limits| proto::TokenLimits {
-                            items: limits
-                                .iter()
-                                .map(|limit| proto::TokenLimit {
-                                    token: limit.token.to_vec(),
-                                    limit: limit.limit.to_be_bytes().to_vec(),
-                                })
-                                .collect(),
-                        }),
-                        signature: Some((&ka.signature).into()),
+                    key_authorization: tx.key_authorization.as_ref().map(|ka| {
+                        proto::KeyAuthorization {
+                            chain_id: ka.chain_id,
+                            key_type: (ka.key_type as u8).into(),
+                            key_id: ka.key_id.to_vec(),
+                            expiry: ka.expiry,
+                            limits: ka.limits.as_ref().map(|limits| proto::TokenLimits {
+                                items: limits
+                                    .iter()
+                                    .map(|limit| proto::TokenLimit {
+                                        token: limit.token.to_vec(),
+                                        limit: limit.limit.to_le_bytes::<32>().to_vec(),
+                                    })
+                                    .collect(),
+                            }),
+                            signature: Some((&ka.signature).into()),
+                        }
                     }),
                     aa_authorization_list: tx
                         .tempo_authorization_list
@@ -392,7 +397,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                 Ok(Self {
                     transaction: Some(transaction),
                     hash,
-                    signature: Some(signature),
+                    signature: Some(proto::transaction::Signature::TempoSignature(signature)),
                 })
             }
         }
@@ -674,7 +679,7 @@ impl TryFrom<&tempo_primitives::TempoReceipt> for proto::NonEmptyReceipt {
     }
 }
 
-impl TryFrom<&proto::ExExNotification> for reth_exex::ExExNotification {
+impl TryFrom<&proto::ExExNotification> for reth_exex::ExExNotification<TempoPrimitives> {
     type Error = eyre::Error;
 
     fn try_from(notification: &proto::ExExNotification) -> Result<Self, Self::Error> {
@@ -715,7 +720,7 @@ impl TryFrom<&proto::Chain> for reth::providers::Chain<TempoPrimitives> {
             .as_ref()
             .ok_or_eyre("no execution outcome")?;
         let bundle = execution_outcome.bundle.as_ref().ok_or_eyre("no bundle")?;
-        Ok(reth::providers::Chain::new(
+        Ok(reth::providers::Chain::<TempoPrimitives>::new(
             chain
                 .blocks
                 .iter()
@@ -773,6 +778,7 @@ impl TryFrom<&proto::Chain> for reth::providers::Chain<TempoPrimitives> {
                 requests: Default::default(),
             },
             BTreeMap::new(),
+            BTreeMap::new(),
         ))
     }
 }
@@ -820,67 +826,187 @@ impl TryFrom<&proto::Block> for reth::primitives::RecoveredBlock<Block> {
     }
 }
 
-impl TryFrom<&proto::Header> for reth::primitives::Header {
+impl TryFrom<&proto::Header> for tempo_primitives::TempoHeader {
     type Error = eyre::Error;
 
     fn try_from(header: &proto::Header) -> Result<Self, Self::Error> {
-        Ok(reth::primitives::Header {
-            parent_hash: B256::try_from(header.parent_hash.as_slice())?,
-            ommers_hash: B256::try_from(header.ommers_hash.as_slice())?,
-            beneficiary: Address::try_from(header.beneficiary.as_slice())?,
-            state_root: B256::try_from(header.state_root.as_slice())?,
-            transactions_root: B256::try_from(header.transactions_root.as_slice())?,
-            receipts_root: B256::try_from(header.receipts_root.as_slice())?,
-            withdrawals_root: header
-                .withdrawals_root
-                .as_ref()
-                .map(|root| B256::try_from(root.as_slice()))
-                .transpose()?,
-            logs_bloom: Bloom::try_from(header.logs_bloom.as_slice())?,
-            difficulty: U256::try_from_le_slice(&header.difficulty)
-                .ok_or_eyre("failed to parse difficulty")?,
-            number: header.number,
-            gas_limit: header.gas_limit,
-            gas_used: header.gas_used,
-            timestamp: header.timestamp,
-            mix_hash: B256::try_from(header.mix_hash.as_slice())?,
-            nonce: B64::try_from(header.nonce.as_slice())?,
-            base_fee_per_gas: header.base_fee_per_gas,
-            blob_gas_used: header.blob_gas_used,
-            excess_blob_gas: header.excess_blob_gas,
-            parent_beacon_block_root: header
-                .parent_beacon_block_root
-                .as_ref()
-                .map(|root| B256::try_from(root.as_slice()))
-                .transpose()?,
-            requests_hash: None,
-            extra_data: header.extra_data.as_slice().to_vec().into(),
+        Ok(tempo_primitives::TempoHeader {
+            inner: alloy_consensus::Header {
+                parent_hash: B256::try_from(header.parent_hash.as_slice())?,
+                ommers_hash: B256::try_from(header.ommers_hash.as_slice())?,
+                beneficiary: Address::try_from(header.beneficiary.as_slice())?,
+                state_root: B256::try_from(header.state_root.as_slice())?,
+                transactions_root: B256::try_from(header.transactions_root.as_slice())?,
+                receipts_root: B256::try_from(header.receipts_root.as_slice())?,
+                withdrawals_root: header
+                    .withdrawals_root
+                    .as_ref()
+                    .map(|root| B256::try_from(root.as_slice()))
+                    .transpose()?,
+                logs_bloom: Bloom::try_from(header.logs_bloom.as_slice())?,
+                difficulty: U256::try_from_le_slice(&header.difficulty)
+                    .ok_or_eyre("failed to parse difficulty")?,
+                number: header.number,
+                gas_limit: header.gas_limit,
+                gas_used: header.gas_used,
+                timestamp: header.timestamp,
+                mix_hash: B256::try_from(header.mix_hash.as_slice())?,
+                nonce: B64::try_from(header.nonce.as_slice())?,
+                base_fee_per_gas: header.base_fee_per_gas,
+                blob_gas_used: header.blob_gas_used,
+                excess_blob_gas: header.excess_blob_gas,
+                parent_beacon_block_root: header
+                    .parent_beacon_block_root
+                    .as_ref()
+                    .map(|root| B256::try_from(root.as_slice()))
+                    .transpose()?,
+                requests_hash: None,
+                extra_data: header.extra_data.as_slice().to_vec().into(),
+            },
+            general_gas_limit: header.general_gas_limit,
+            shared_gas_limit: header.shared_gas_limit,
+            timestamp_millis_part: header.timestamp_millis_part,
         })
     }
 }
 
-impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
+impl TryFrom<&proto::Transaction> for tempo_primitives::TempoTxEnvelope {
     type Error = eyre::Error;
 
-    fn try_from(transaction: &proto::Transaction) -> Result<Self, Self::Error> {
-        let hash = TxHash::try_from(transaction.hash.as_slice())?;
-        let signature = transaction.signature.as_ref().ok_or_eyre("no signature")?;
-        if signature.y_parity > 1 {
-            return Err(eyre::eyre!(
-                alloy_primitives::SignatureError::InvalidParity(signature.y_parity as u64)
-            ));
-        }
-        let signature = alloy_primitives::Signature::new(
-            U256::try_from_le_slice(signature.r.as_slice()).ok_or_eyre("failed to parse r")?,
-            U256::try_from_le_slice(signature.s.as_slice()).ok_or_eyre("failed to parse s")?,
-            signature.y_parity == 1,
-        );
+    fn try_from(value: &proto::Transaction) -> Result<Self, Self::Error> {
+        let hash = TxHash::try_from(value.hash.as_slice())?;
+        let transaction = value.transaction.as_ref().ok_or_eyre("no transaction")?;
 
-        let transaction = match transaction
-            .transaction
-            .as_ref()
-            .ok_or_eyre("no transaction")?
-        {
+        let eth_signature = || -> eyre::Result<alloy_primitives::Signature> {
+            let s = match value.signature.as_ref().ok_or_eyre("no signature")? {
+                proto::transaction::Signature::EthSignature(s) => s,
+                proto::transaction::Signature::TempoSignature(_) => {
+                    return Err(eyre!("Invalid signature for non tempo transaction"));
+                }
+            };
+            if s.y_parity > 1 {
+                return Err(eyre::eyre!(
+                    alloy_primitives::SignatureError::InvalidParity(s.y_parity as u64)
+                ));
+            }
+            Ok(alloy_primitives::Signature::new(
+                U256::try_from_le_slice(s.r.as_slice()).ok_or_eyre("failed to parse r")?,
+                U256::try_from_le_slice(s.s.as_slice()).ok_or_eyre("failed to parse s")?,
+                s.y_parity == 1,
+            ))
+        };
+
+        match transaction {
+            proto::transaction::Transaction::Tempo(t) => {
+                let tempo_transaction = tempo_primitives::TempoTransaction {
+                    chain_id: t.chain_id,
+                    max_fee_per_gas: u128::from_le_bytes(t.max_fee_per_gas.as_slice().try_into()?),
+                    max_priority_fee_per_gas: u128::from_le_bytes(
+                        t.max_priority_fee_per_gas.as_slice().try_into()?,
+                    ),
+                    fee_token: t
+                        .fee_token
+                        .as_ref()
+                        .map(|token| Address::try_from(token.as_slice()))
+                        .transpose()?,
+                    gas_limit: t.gas_limit,
+                    calls: t
+                        .calls
+                        .iter()
+                        .map(|call| {
+                            let to = call.to.as_ref().ok_or_eyre("no `to` for call")?;
+                            let call = Call {
+                                to: to.try_into()?,
+                                value: U256::try_from_le_slice(call.value.as_slice())
+                                    .ok_or_eyre("call.value can't be converted to U256")?,
+                                input: Bytes::copy_from_slice(&call.input),
+                            };
+                            Ok(call)
+                        })
+                        .collect::<eyre::Result<Vec<_>>>()?,
+                    access_list: t
+                        .access_list
+                        .iter()
+                        .map(|item| item.try_into())
+                        .collect::<eyre::Result<Vec<_>>>()?
+                        .into(),
+                    nonce: t.nonce,
+                    nonce_key: U256::try_from_le_slice(t.nonce_key.as_slice())
+                        .ok_or_eyre("nonce key can't be converted to U256")?,
+                    fee_payer_signature: t
+                        .fee_payer_signature
+                        .as_ref()
+                        .map(TryInto::try_into)
+                        .transpose()?,
+                    valid_before: t.valid_before,
+                    valid_after: t.valid_before,
+                    key_authorization: t
+                        .key_authorization
+                        .as_ref()
+                        .map(|ka| {
+                            let authorization = KeyAuthorization {
+                                chain_id: ka.chain_id,
+                                key_type: proto::SignatureType::try_from(ka.key_type)?.into(),
+                                key_id: ka.key_id.as_slice().try_into()?,
+                                expiry: ka.expiry,
+                                limits: ka
+                                    .limits
+                                    .as_ref()
+                                    .map(|item| {
+                                        item.items
+                                            .iter()
+                                            .map(|limit| {
+                                                Ok(TokenLimit {
+                                                    token: limit.token.as_slice().try_into()?,
+                                                    limit: U256::from_le_slice(
+                                                        limit.limit.as_slice(),
+                                                    ),
+                                                })
+                                            })
+                                            .collect::<eyre::Result<Vec<_>>>()
+                                    })
+                                    .transpose()?,
+                            };
+                            let signature = ka
+                                .signature
+                                .as_ref()
+                                .ok_or_eyre("no signature in key authorization")?;
+                            eyre::Ok(tempo_primitives::transaction::SignedKeyAuthorization {
+                                authorization,
+                                signature: signature.try_into()?,
+                            })
+                        })
+                        .transpose()?,
+                    tempo_authorization_list: t
+                        .aa_authorization_list
+                        .iter()
+                        .map(|auth| {
+                            let signature = auth
+                                .signature
+                                .as_ref()
+                                .ok_or_eyre("no signature in tempo authorization list item")?;
+                            Ok(TempoSignedAuthorization::new_unchecked(
+                                alloy_eips::eip7702::Authorization {
+                                    chain_id: U256::try_from_le_slice(&auth.chain_id)
+                                        .ok_or_eyre("failed to parse chain_id")?,
+                                    address: auth.address.as_slice().try_into()?,
+                                    nonce: auth.nonce,
+                                },
+                                signature.try_into()?,
+                            ))
+                        })
+                        .collect::<eyre::Result<_>>()?,
+                };
+                let signature: TempoSignature =
+                    match value.signature.as_ref().ok_or_eyre("no signature")? {
+                        proto::transaction::Signature::TempoSignature(s) => s.try_into()?,
+                        proto::transaction::Signature::EthSignature(_) => {
+                            return Err(eyre!("invalid signature for tempo transaction"));
+                        }
+                    };
+                let signed = AASigned::new_unchecked(tempo_transaction, signature, hash);
+                Ok(TempoTxEnvelope::AA(signed))
+            }
             proto::transaction::Transaction::Legacy(proto::TransactionLegacy {
                 chain_id,
                 nonce,
@@ -889,16 +1015,21 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
                 to,
                 value,
                 input,
-            }) => reth::primitives::Transaction::Legacy(alloy_consensus::TxLegacy {
-                chain_id: *chain_id,
-                nonce: *nonce,
-                gas_price: u128::from_le_bytes(gas_price.as_slice().try_into()?),
-                gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
-                to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
-                value: U256::try_from_le_slice(value.as_slice())
-                    .ok_or_eyre("failed to parse value")?,
-                input: input.to_vec().into(),
-            }),
+            }) => Ok(Signed::new_unchecked(
+                alloy_consensus::TxLegacy {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_price: u128::from_le_bytes(gas_price.as_slice().try_into()?),
+                    gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
+                    to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
+                    value: U256::try_from_le_slice(value.as_slice())
+                        .ok_or_eyre("failed to parse value")?,
+                    input: input.to_vec().into(),
+                },
+                eth_signature()?,
+                hash,
+            )
+            .into()),
             proto::transaction::Transaction::Eip2930(proto::TransactionEip2930 {
                 chain_id,
                 nonce,
@@ -908,21 +1039,26 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
                 value,
                 access_list,
                 input,
-            }) => reth::primitives::Transaction::Eip2930(alloy_consensus::TxEip2930 {
-                chain_id: *chain_id,
-                nonce: *nonce,
-                gas_price: u128::from_le_bytes(gas_price.as_slice().try_into()?),
-                gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
-                to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
-                value: U256::try_from_le_slice(value.as_slice())
-                    .ok_or_eyre("failed to parse value")?,
-                access_list: access_list
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<eyre::Result<Vec<_>>>()?
-                    .into(),
-                input: input.to_vec().into(),
-            }),
+            }) => Ok(Signed::new_unchecked(
+                alloy_consensus::TxEip2930 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_price: u128::from_le_bytes(gas_price.as_slice().try_into()?),
+                    gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
+                    to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
+                    value: U256::try_from_le_slice(value.as_slice())
+                        .ok_or_eyre("failed to parse value")?,
+                    access_list: access_list
+                        .iter()
+                        .map(TryInto::try_into)
+                        .collect::<eyre::Result<Vec<_>>>()?
+                        .into(),
+                    input: input.to_vec().into(),
+                },
+                eth_signature()?,
+                hash,
+            )
+            .into()),
             proto::transaction::Transaction::Eip1559(proto::TransactionEip1559 {
                 chain_id,
                 nonce,
@@ -933,61 +1069,29 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
                 value,
                 access_list,
                 input,
-            }) => reth::primitives::Transaction::Eip1559(alloy_consensus::TxEip1559 {
-                chain_id: *chain_id,
-                nonce: *nonce,
-                gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
-                max_fee_per_gas: u128::from_le_bytes(max_fee_per_gas.as_slice().try_into()?),
-                max_priority_fee_per_gas: u128::from_le_bytes(
-                    max_priority_fee_per_gas.as_slice().try_into()?,
-                ),
-                to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
-                value: U256::try_from_le_slice(value.as_slice())
-                    .ok_or_eyre("failed to parse value")?,
-                access_list: access_list
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<eyre::Result<Vec<_>>>()?
-                    .into(),
-                input: input.to_vec().into(),
-            }),
-            proto::transaction::Transaction::Eip4844(proto::TransactionEip4844 {
-                chain_id,
-                nonce,
-                gas_limit,
-                max_fee_per_gas,
-                max_priority_fee_per_gas,
-                to,
-                value,
-                access_list,
-                blob_versioned_hashes,
-                max_fee_per_blob_gas,
-                input,
-            }) => reth::primitives::Transaction::Eip4844(alloy_consensus::TxEip4844 {
-                chain_id: *chain_id,
-                nonce: *nonce,
-                gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
-                max_fee_per_gas: u128::from_le_bytes(max_fee_per_gas.as_slice().try_into()?),
-                max_priority_fee_per_gas: u128::from_le_bytes(
-                    max_priority_fee_per_gas.as_slice().try_into()?,
-                ),
-                to: Address::try_from(to.as_slice())?,
-                value: U256::try_from_le_slice(value.as_slice())
-                    .ok_or_eyre("failed to parse value")?,
-                access_list: access_list
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<eyre::Result<Vec<_>>>()?
-                    .into(),
-                blob_versioned_hashes: blob_versioned_hashes
-                    .iter()
-                    .map(|hash| B256::try_from(hash.as_slice()))
-                    .collect::<Result<_, _>>()?,
-                max_fee_per_blob_gas: u128::from_le_bytes(
-                    max_fee_per_blob_gas.as_slice().try_into()?,
-                ),
-                input: input.to_vec().into(),
-            }),
+            }) => Ok(Signed::new_unchecked(
+                alloy_consensus::TxEip1559 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
+                    max_fee_per_gas: u128::from_le_bytes(max_fee_per_gas.as_slice().try_into()?),
+                    max_priority_fee_per_gas: u128::from_le_bytes(
+                        max_priority_fee_per_gas.as_slice().try_into()?,
+                    ),
+                    to: to.as_ref().ok_or_eyre("no to")?.try_into()?,
+                    value: U256::try_from_le_slice(value.as_slice())
+                        .ok_or_eyre("failed to parse value")?,
+                    access_list: access_list
+                        .iter()
+                        .map(TryInto::try_into)
+                        .collect::<eyre::Result<Vec<_>>>()?
+                        .into(),
+                    input: input.to_vec().into(),
+                },
+                eth_signature()?,
+                hash,
+            )
+            .into()),
             proto::transaction::Transaction::Eip7702(proto::TransactionEip7702 {
                 chain_id,
                 nonce,
@@ -999,71 +1103,165 @@ impl TryFrom<&proto::Transaction> for reth::primitives::TransactionSigned {
                 access_list,
                 authorization_list,
                 input,
-            }) => reth::primitives::Transaction::Eip7702(alloy_consensus::TxEip7702 {
-                chain_id: *chain_id,
-                nonce: *nonce,
-                gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
-                max_fee_per_gas: u128::from_le_bytes(max_fee_per_gas.as_slice().try_into()?),
-                max_priority_fee_per_gas: u128::from_le_bytes(
-                    max_priority_fee_per_gas.as_slice().try_into()?,
-                ),
-                to: Address::try_from(to.as_slice())?,
-                value: U256::try_from_le_slice(value.as_slice())
-                    .ok_or_eyre("failed to parse value")?,
-                access_list: access_list
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<eyre::Result<Vec<_>>>()?
-                    .into(),
-                authorization_list: authorization_list
-                    .iter()
-                    .map(|authorization| {
-                        let signature = authorization
-                            .signature
-                            .as_ref()
-                            .ok_or_eyre("no signature")?;
+            }) => Ok(Signed::new_unchecked(
+                alloy_consensus::TxEip7702 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_limit: u64::from_le_bytes(gas_limit.as_slice().try_into()?),
+                    max_fee_per_gas: u128::from_le_bytes(max_fee_per_gas.as_slice().try_into()?),
+                    max_priority_fee_per_gas: u128::from_le_bytes(
+                        max_priority_fee_per_gas.as_slice().try_into()?,
+                    ),
+                    to: Address::try_from(to.as_slice())?,
+                    value: U256::try_from_le_slice(value.as_slice())
+                        .ok_or_eyre("failed to parse value")?,
+                    access_list: access_list
+                        .iter()
+                        .map(TryInto::try_into)
+                        .collect::<eyre::Result<Vec<_>>>()?
+                        .into(),
+                    authorization_list: authorization_list
+                        .iter()
+                        .map(|authorization| {
+                            let signature = authorization
+                                .signature
+                                .as_ref()
+                                .ok_or_eyre("no signature")?;
 
-                        let r = U256::try_from_le_slice(signature.r.as_slice())
-                            .ok_or_eyre("failed to parse r")?;
-                        let s = U256::try_from_le_slice(signature.s.as_slice())
-                            .ok_or_eyre("failed to parse s")?;
-                        let y_parity = signature.y_parity as u8;
+                            let r = U256::try_from_le_slice(signature.r.as_slice())
+                                .ok_or_eyre("failed to parse r")?;
+                            let s = U256::try_from_le_slice(signature.s.as_slice())
+                                .ok_or_eyre("failed to parse s")?;
+                            let y_parity = signature.y_parity as u8;
 
-                        let authorization = authorization
-                            .authorization
-                            .as_ref()
-                            .ok_or_eyre("no authorization")?;
+                            let authorization = authorization
+                                .authorization
+                                .as_ref()
+                                .ok_or_eyre("no authorization")?;
 
-                        let chain_id = U256::from_le_bytes::<{ U256::BYTES }>(
-                            authorization
-                                .chain_id
-                                .as_slice()
-                                .try_into()
-                                .map_err(|_| eyre::eyre!("chain_id must be exactly 8 bytes"))?,
-                        );
-                        let authorization = alloy_eips::eip7702::Authorization {
-                            chain_id,
-                            address: Address::try_from(authorization.address.as_slice())?,
-                            nonce: authorization.nonce,
-                        };
+                            let chain_id =
+                                U256::from_le_bytes::<{ U256::BYTES }>(
+                                    authorization.chain_id.as_slice().try_into().map_err(|_| {
+                                        eyre::eyre!("chain_id must be exactly 8 bytes")
+                                    })?,
+                                );
+                            let authorization = alloy_eips::eip7702::Authorization {
+                                chain_id,
+                                address: Address::try_from(authorization.address.as_slice())?,
+                                nonce: authorization.nonce,
+                            };
 
-                        Ok(alloy_eips::eip7702::SignedAuthorization::new_unchecked(
-                            authorization,
-                            y_parity,
-                            r,
-                            s,
-                        ))
-                    })
-                    .collect::<eyre::Result<Vec<_>>>()?,
-                input: input.to_vec().into(),
-            }),
+                            Ok(alloy_eips::eip7702::SignedAuthorization::new_unchecked(
+                                authorization,
+                                y_parity,
+                                r,
+                                s,
+                            ))
+                        })
+                        .collect::<eyre::Result<Vec<_>>>()?,
+                    input: input.to_vec().into(),
+                },
+                eth_signature()?,
+                hash,
+            )
+            .into()),
+        }
+    }
+}
+
+impl From<proto::SignatureType> for tempo_primitives::SignatureType {
+    fn from(value: proto::SignatureType) -> Self {
+        match value {
+            proto::SignatureType::Secp256k1 => Self::Secp256k1,
+            proto::SignatureType::P256 => Self::P256,
+            proto::SignatureType::Webauthn => Self::WebAuthn,
+        }
+    }
+}
+
+impl TryFrom<&proto::Signature> for alloy_primitives::Signature {
+    type Error = eyre::Error;
+
+    fn try_from(value: &proto::Signature) -> Result<Self, Self::Error> {
+        let signature = alloy_primitives::Signature::new(
+            U256::try_from_le_slice(value.r.as_slice()).ok_or_eyre("failed to parse r")?,
+            U256::try_from_le_slice(value.s.as_slice()).ok_or_eyre("failed to parse s")?,
+            value.y_parity == 1,
+        );
+        Ok(signature)
+    }
+}
+
+impl TryFrom<&proto::PrimitiveSignature> for PrimitiveSignature {
+    type Error = eyre::Error;
+
+    fn try_from(value: &proto::PrimitiveSignature) -> Result<Self, Self::Error> {
+        let signature = value
+            .signature
+            .as_ref()
+            .ok_or_eyre("no primitive signature")?;
+
+        let signature = match signature {
+            proto::primitive_signature::Signature::Secp256k1(s) => {
+                PrimitiveSignature::Secp256k1(s.try_into()?)
+            }
+            proto::primitive_signature::Signature::P256(s) => {
+                PrimitiveSignature::P256(P256SignatureWithPreHash {
+                    r: s.r.as_slice().try_into()?,
+                    s: s.s.as_slice().try_into()?,
+                    pub_key_x: s.pub_key_x.as_slice().try_into()?,
+                    pub_key_y: s.pub_key_y.as_slice().try_into()?,
+                    pre_hash: s.pre_hash,
+                })
+            }
+            proto::primitive_signature::Signature::Webauthn(s) => {
+                PrimitiveSignature::WebAuthn(WebAuthnSignature {
+                    r: s.r.as_slice().try_into()?,
+                    s: s.s.as_slice().try_into()?,
+                    pub_key_x: s.pub_key_x.as_slice().try_into()?,
+                    pub_key_y: s.pub_key_y.as_slice().try_into()?,
+                    webauthn_data: Bytes::copy_from_slice(&s.webauthn_data),
+                })
+            }
         };
+        Ok(signature)
+    }
+}
 
-        Ok(reth::primitives::TransactionSigned::new_unchecked(
-            transaction,
-            signature,
-            hash,
-        ))
+impl From<proto::KeychainVersion> for KeychainVersion {
+    fn from(value: proto::KeychainVersion) -> Self {
+        match value {
+            proto::KeychainVersion::V1 => KeychainVersion::V1,
+            proto::KeychainVersion::V2 => KeychainVersion::V2,
+        }
+    }
+}
+
+impl TryFrom<&proto::TempoSignature> for tempo_primitives::TempoSignature {
+    type Error = eyre::Error;
+
+    fn try_from(value: &proto::TempoSignature) -> Result<Self, Self::Error> {
+        let signature = value.signature.as_ref().ok_or_eyre("no tempo signature")?;
+        let signature = match signature {
+            proto::tempo_signature::Signature::Primitive(s) => {
+                tempo_primitives::TempoSignature::Primitive(s.try_into()?)
+            }
+            proto::tempo_signature::Signature::Keychain(s) => {
+                let version: KeychainVersion = proto::KeychainVersion::try_from(s.version)?.into();
+                let user_address = s.user_address.as_slice().try_into()?;
+                let keychain_signature =
+                    s.signature.as_ref().ok_or_eyre("no keychain signature")?;
+                let keychain_signature = keychain_signature.try_into()?;
+                let keychain = match version {
+                    KeychainVersion::V1 => {
+                        KeychainSignature::new_v1(user_address, keychain_signature)
+                    }
+                    KeychainVersion::V2 => KeychainSignature::new(user_address, keychain_signature),
+                };
+                tempo_primitives::TempoSignature::Keychain(keychain)
+            }
+        };
+        Ok(signature)
     }
 }
 
@@ -1280,11 +1478,11 @@ impl TryFrom<&proto::NonEmptyReceipt> for tempo_primitives::TempoReceipt {
     fn try_from(receipt: &proto::NonEmptyReceipt) -> Result<Self, Self::Error> {
         Ok(reth::primitives::Receipt {
             tx_type: match proto::TxType::try_from(receipt.tx_type)? {
-                proto::TxType::Legacy => reth::primitives::TxType::Legacy,
-                proto::TxType::Eip2930 => reth::primitives::TxType::Eip2930,
-                proto::TxType::Eip1559 => reth::primitives::TxType::Eip1559,
-                proto::TxType::Eip4844 => reth::primitives::TxType::Eip4844,
-                proto::TxType::Eip7702 => reth::primitives::TxType::Eip7702,
+                proto::TxType::Legacy => tempo_primitives::TempoTxType::Legacy,
+                proto::TxType::Eip2930 => tempo_primitives::TempoTxType::Eip2930,
+                proto::TxType::Eip1559 => tempo_primitives::TempoTxType::Eip1559,
+                proto::TxType::Eip7702 => tempo_primitives::TempoTxType::Eip7702,
+                proto::TxType::Tempo => tempo_primitives::TempoTxType::Eip7702,
             },
             success: receipt.success,
             cumulative_gas_used: receipt.cumulative_gas_used,
