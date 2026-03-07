@@ -1,25 +1,23 @@
+use std::sync::Arc;
+
 use futures_util::TryStreamExt;
 use reth::api::FullNodeComponents;
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
+use reth_tracing::tracing::info;
 use tempo_evm::TempoEvmConfig;
 use tempo_node::node::TempoNode;
-use reth_tracing::tracing::info;
-
+use tempo_primitives::TempoPrimitives;
+use tokio::sync::broadcast;
 
 pub struct ExEx<Node: FullNodeComponents> {
-    ctx: ExExContext<Node>
+    pub ctx: ExExContext<Node>,
+    pub notifications_tx: Arc<broadcast::Sender<ExExNotification<TempoPrimitives>>>,
 }
 
-impl<Node> ExEx<Node> 
-    where 
-        Node: FullNodeComponents<Types = TempoNode, Evm = TempoEvmConfig> 
+impl<Node> ExEx<Node>
+where
+    Node: FullNodeComponents<Types = TempoNode, Evm = TempoEvmConfig>,
 {
-    pub fn new(ctx: ExExContext<Node>) -> Self {
-        Self {
-            ctx
-        }
-    }
-
     pub async fn start(mut self) -> eyre::Result<()> {
         while let Some(notification) = self.ctx.notifications.try_next().await? {
             match &notification {
@@ -34,9 +32,12 @@ impl<Node> ExEx<Node>
                 }
             };
 
-            if let Some(committed_chain) = notification.committed_chain() {
-                self.ctx.events.send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
-            }
+            if let Some(committed_chain) = &notification.committed_chain() {
+                self.ctx
+                    .events
+                    .send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
+            };
+            self.notifications_tx.send(notification)?;
         }
         Ok(())
     }

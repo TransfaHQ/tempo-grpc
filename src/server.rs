@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::server::proto::{SubscribeRequest, remote_ex_ex_server::RemoteExEx};
 use reth_exex::ExExNotification;
 use tempo_primitives::TempoPrimitives;
@@ -11,7 +13,7 @@ pub mod proto {
 
 #[derive(Debug)]
 pub struct RemoteExExService {
-    pub exex_notifications: broadcast::Sender<ExExNotification<TempoPrimitives>>,
+    pub exex_notifications: Arc<broadcast::Sender<ExExNotification<TempoPrimitives>>>,
 }
 
 #[tonic::async_trait]
@@ -20,7 +22,7 @@ impl RemoteExEx for RemoteExExService {
 
     async fn subscribe(
         &self,
-        request: Request<SubscribeRequest>,
+        _request: Request<SubscribeRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
         let (tx, rx) = mpsc::channel(1);
         let mut receiver = self.exex_notifications.subscribe();
