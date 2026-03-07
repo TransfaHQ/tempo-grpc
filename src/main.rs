@@ -1,4 +1,5 @@
 use clap::Parser;
+use reth_tracing::tracing::info;
 use std::sync::Arc;
 use tonic::transport::Server;
 
@@ -83,10 +84,10 @@ fn main() -> eyre::Result<()> {
         handle
             .node
             .task_executor
-            .spawn_critical(
-                "grpc",
-                async move { server.await.expect("gRPC server crashed") },
-            );
+            .spawn_critical("grpc", async move {
+                info!("GRPC server started");
+                server.await.expect("gRPC server crashed")
+            });
 
         handle.wait_for_node_exit().await
     })

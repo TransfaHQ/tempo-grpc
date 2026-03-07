@@ -146,34 +146,46 @@ impl TryFrom<&reth::providers::Chain<TempoPrimitives>> for proto::Chain {
 
 impl From<&tempo_primitives::TempoHeader> for proto::Header {
     fn from(header: &tempo_primitives::TempoHeader) -> Self {
+        let inner = &header.inner;
         proto::Header {
-            parent_hash: header.inner.parent_hash.to_vec(),
-            ommers_hash: header.inner.ommers_hash.to_vec(),
-            beneficiary: header.inner.beneficiary.to_vec(),
-            state_root: header.inner.state_root.to_vec(),
-            transactions_root: header.inner.transactions_root.to_vec(),
-            receipts_root: header.inner.receipts_root.to_vec(),
-            withdrawals_root: header.inner.withdrawals_root.map(|root| root.to_vec()),
-            logs_bloom: header.inner.logs_bloom.to_vec(),
-            difficulty: header.inner.difficulty.to_le_bytes_vec(),
-            number: header.inner.number,
-            gas_limit: header.inner.gas_limit,
-            gas_used: header.inner.gas_used,
-            timestamp: header.inner.timestamp,
-            mix_hash: header.inner.mix_hash.to_vec(),
-            nonce: header.inner.nonce.to_vec(),
-            base_fee_per_gas: header.inner.base_fee_per_gas,
-            blob_gas_used: header.inner.blob_gas_used,
-            excess_blob_gas: header.inner.excess_blob_gas,
-            parent_beacon_block_root: header
-                .inner
+            parent_hash: inner.parent_hash.to_vec(),
+            ommers_hash: inner.ommers_hash.to_vec(),
+            beneficiary: inner.beneficiary.to_vec(),
+            state_root: inner.state_root.to_vec(),
+            transactions_root: inner.transactions_root.to_vec(),
+            receipts_root: inner.receipts_root.to_vec(),
+            withdrawals_root: inner.withdrawals_root.map(|root| root.to_vec()),
+            logs_bloom: inner.logs_bloom.to_vec(),
+            difficulty: inner.difficulty.to_le_bytes_vec(),
+            number: inner.number,
+            gas_limit: inner.gas_limit,
+            gas_used: inner.gas_used,
+            timestamp: inner.timestamp,
+            mix_hash: inner.mix_hash.to_vec(),
+            nonce: inner.nonce.to_vec(),
+            base_fee_per_gas: inner.base_fee_per_gas,
+            blob_gas_used: inner.blob_gas_used,
+            excess_blob_gas: inner.excess_blob_gas,
+            parent_beacon_block_root: inner
                 .parent_beacon_block_root
                 .map(|root| root.to_vec()),
-            extra_data: header.inner.extra_data.to_vec(),
+            extra_data: inner.extra_data.to_vec(),
             general_gas_limit: header.general_gas_limit,
             shared_gas_limit: header.shared_gas_limit,
             timestamp_millis_part: header.timestamp_millis_part,
         }
+    }
+}
+
+fn eth_tx_to_proto(
+    hash: &TxHash,
+    signature: &alloy_primitives::Signature,
+    transaction: proto::transaction::Transaction,
+) -> proto::Transaction {
+    proto::Transaction {
+        transaction: Some(transaction),
+        hash: hash.to_vec(),
+        signature: Some(proto::transaction::Signature::EthSignature(signature.into())),
     }
 }
 
@@ -192,13 +204,9 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                     value,
                     input,
                 } = signed.tx();
-                let hash = signed.hash().to_vec();
-                let signature = proto::Signature {
-                    r: signed.signature().r().to_le_bytes_vec(),
-                    s: signed.signature().s().to_le_bytes_vec(),
-                    y_parity: signed.signature().v() as u8 as u32,
-                };
-                let transaction =
+                Ok(eth_tx_to_proto(
+                    signed.hash(),
+                    signed.signature(),
                     proto::transaction::Transaction::Legacy(proto::TransactionLegacy {
                         chain_id: *chain_id,
                         nonce: *nonce,
@@ -207,13 +215,8 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                         to: Some(to.into()),
                         value: value.to_le_bytes_vec(),
                         input: input.to_vec(),
-                    });
-
-                Ok(Self {
-                    transaction: Some(transaction),
-                    hash,
-                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
-                })
+                    }),
+                ))
             }
             TempoTxEnvelope::Eip2930(signed) => {
                 let alloy_consensus::TxEip2930 {
@@ -226,13 +229,9 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                     access_list,
                     input,
                 } = signed.tx();
-                let hash = signed.hash().to_vec();
-                let signature = proto::Signature {
-                    r: signed.signature().r().to_le_bytes_vec(),
-                    s: signed.signature().s().to_le_bytes_vec(),
-                    y_parity: signed.signature().v() as u8 as u32,
-                };
-                let transaction =
+                Ok(eth_tx_to_proto(
+                    signed.hash(),
+                    signed.signature(),
                     proto::transaction::Transaction::Eip2930(proto::TransactionEip2930 {
                         chain_id: *chain_id,
                         nonce: *nonce,
@@ -242,12 +241,8 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                         value: value.to_le_bytes_vec(),
                         access_list: access_list.iter().map(Into::into).collect(),
                         input: input.to_vec(),
-                    });
-                Ok(Self {
-                    transaction: Some(transaction),
-                    hash,
-                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
-                })
+                    }),
+                ))
             }
             TempoTxEnvelope::Eip1559(signed) => {
                 let alloy_consensus::TxEip1559 {
@@ -261,13 +256,9 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                     access_list,
                     input,
                 } = signed.tx();
-                let hash = signed.hash().to_vec();
-                let signature = proto::Signature {
-                    r: signed.signature().r().to_le_bytes_vec(),
-                    s: signed.signature().s().to_le_bytes_vec(),
-                    y_parity: signed.signature().v() as u8 as u32,
-                };
-                let transaction =
+                Ok(eth_tx_to_proto(
+                    signed.hash(),
+                    signed.signature(),
                     proto::transaction::Transaction::Eip1559(proto::TransactionEip1559 {
                         chain_id: *chain_id,
                         nonce: *nonce,
@@ -278,12 +269,8 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                         value: value.to_le_bytes_vec(),
                         access_list: access_list.iter().map(Into::into).collect(),
                         input: input.to_vec(),
-                    });
-                Ok(Self {
-                    transaction: Some(transaction),
-                    hash,
-                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
-                })
+                    }),
+                ))
             }
             TempoTxEnvelope::Eip7702(signed) => {
                 let alloy_consensus::TxEip7702 {
@@ -298,7 +285,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                     authorization_list,
                     input,
                 } = signed.tx();
-                let authorization_list: Vec<proto::AuthorizationListItem> = authorization_list
+                let authorization_list = authorization_list
                     .iter()
                     .map(|authorization| proto::AuthorizationListItem {
                         authorization: Some(proto::Authorization {
@@ -312,15 +299,10 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                             y_parity: authorization.y_parity() as u32,
                         }),
                     })
-                    .collect::<Vec<_>>();
-
-                let hash = signed.hash().to_vec();
-                let signature = proto::Signature {
-                    r: signed.signature().r().to_le_bytes_vec(),
-                    s: signed.signature().s().to_le_bytes_vec(),
-                    y_parity: signed.signature().v() as u8 as u32,
-                };
-                let transaction =
+                    .collect();
+                Ok(eth_tx_to_proto(
+                    signed.hash(),
+                    signed.signature(),
                     proto::transaction::Transaction::Eip7702(proto::TransactionEip7702 {
                         chain_id: *chain_id,
                         nonce: *nonce,
@@ -332,12 +314,8 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                         access_list: access_list.iter().map(Into::into).collect(),
                         authorization_list,
                         input: input.to_vec(),
-                    });
-                Ok(Self {
-                    transaction: Some(transaction),
-                    hash,
-                    signature: Some(proto::transaction::Signature::EthSignature(signature)),
-                })
+                    }),
+                ))
             }
             TempoTxEnvelope::AA(signed) => {
                 let tx = signed.tx();
@@ -1504,5 +1482,694 @@ impl TryFrom<&proto::NonEmptyReceipt> for tempo_primitives::TempoReceipt {
                 })
                 .collect::<eyre::Result<_>>()?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HASH_SIZE: usize = 32;
+    const ADDR_SIZE: usize = 20;
+    const BLOOM_SIZE: usize = 256;
+    const NONCE_SIZE: usize = 8;
+
+    fn dummy_bytes(len: usize, seed: u8) -> Vec<u8> {
+        (0..len).map(|i| seed.wrapping_add(i as u8)).collect()
+    }
+
+    fn test_header() -> proto::Header {
+        proto::Header {
+            parent_hash: dummy_bytes(HASH_SIZE, 1),
+            ommers_hash: dummy_bytes(HASH_SIZE, 2),
+            beneficiary: dummy_bytes(ADDR_SIZE, 3),
+            state_root: dummy_bytes(HASH_SIZE, 4),
+            transactions_root: dummy_bytes(HASH_SIZE, 5),
+            receipts_root: dummy_bytes(HASH_SIZE, 6),
+            withdrawals_root: Some(dummy_bytes(HASH_SIZE, 7)),
+            logs_bloom: dummy_bytes(BLOOM_SIZE, 8),
+            difficulty: U256::from(1000u64).to_le_bytes_vec(),
+            number: 42,
+            gas_limit: 30_000_000,
+            gas_used: 21_000,
+            timestamp: 1_700_000_000,
+            mix_hash: dummy_bytes(HASH_SIZE, 9),
+            nonce: dummy_bytes(NONCE_SIZE, 10),
+            base_fee_per_gas: Some(1_000_000_000),
+            blob_gas_used: Some(131072),
+            excess_blob_gas: Some(0),
+            parent_beacon_block_root: Some(dummy_bytes(HASH_SIZE, 11)),
+            extra_data: vec![0xca, 0xfe],
+            general_gas_limit: 15_000_000,
+            shared_gas_limit: 15_000_000,
+            timestamp_millis_part: 500,
+        }
+    }
+
+    fn test_eth_signature() -> proto::Signature {
+        proto::Signature {
+            r: U256::from(12345u64).to_le_bytes_vec(),
+            s: U256::from(67890u64).to_le_bytes_vec(),
+            y_parity: 1,
+        }
+    }
+
+    fn test_access_list() -> Vec<proto::AccessListItem> {
+        vec![proto::AccessListItem {
+            address: dummy_bytes(ADDR_SIZE, 50),
+            storage_keys: vec![dummy_bytes(HASH_SIZE, 60), dummy_bytes(HASH_SIZE, 70)],
+        }]
+    }
+
+    fn test_tx_kind_call() -> proto::TxKind {
+        proto::TxKind {
+            kind: Some(proto::tx_kind::Kind::Call(dummy_bytes(ADDR_SIZE, 20))),
+        }
+    }
+
+    // ==================== Header tests ====================
+
+    #[test]
+    fn test_header_roundtrip() {
+        let original = test_header();
+        let domain: tempo_primitives::TempoHeader = (&original).try_into().unwrap();
+        let roundtrip: proto::Header = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_header_roundtrip_without_optionals() {
+        let original = proto::Header {
+            withdrawals_root: None,
+            parent_beacon_block_root: None,
+            base_fee_per_gas: None,
+            blob_gas_used: None,
+            excess_blob_gas: None,
+            ..test_header()
+        };
+        let domain: tempo_primitives::TempoHeader = (&original).try_into().unwrap();
+        let roundtrip: proto::Header = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    // ==================== Transaction tests ====================
+
+    #[test]
+    fn test_legacy_tx_roundtrip() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 100),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Legacy(
+                proto::TransactionLegacy {
+                    chain_id: Some(1),
+                    nonce: 5,
+                    gas_price: 1_000_000_000u128.to_le_bytes().to_vec(),
+                    gas_limit: 21_000u64.to_le_bytes().to_vec(),
+                    to: Some(test_tx_kind_call()),
+                    value: U256::from(1_000_000u64).to_le_bytes_vec(),
+                    input: vec![0xab, 0xcd],
+                },
+            )),
+        };
+        let domain: TempoTxEnvelope = (&original).try_into().unwrap();
+        let roundtrip: proto::Transaction = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_eip2930_tx_roundtrip() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 101),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Eip2930(
+                proto::TransactionEip2930 {
+                    chain_id: 1,
+                    nonce: 10,
+                    gas_price: 2_000_000_000u128.to_le_bytes().to_vec(),
+                    gas_limit: 50_000u64.to_le_bytes().to_vec(),
+                    to: Some(test_tx_kind_call()),
+                    value: U256::from(500_000u64).to_le_bytes_vec(),
+                    access_list: test_access_list(),
+                    input: vec![0x01, 0x02, 0x03],
+                },
+            )),
+        };
+        let domain: TempoTxEnvelope = (&original).try_into().unwrap();
+        let roundtrip: proto::Transaction = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_eip1559_tx_roundtrip() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 102),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Eip1559(
+                proto::TransactionEip1559 {
+                    chain_id: 1,
+                    nonce: 15,
+                    gas_limit: 100_000u64.to_le_bytes().to_vec(),
+                    max_fee_per_gas: 50_000_000_000u128.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: 2_000_000_000u128.to_le_bytes().to_vec(),
+                    to: Some(test_tx_kind_call()),
+                    value: U256::from(1_000_000_000u64).to_le_bytes_vec(),
+                    access_list: test_access_list(),
+                    input: vec![],
+                },
+            )),
+        };
+        let domain: TempoTxEnvelope = (&original).try_into().unwrap();
+        let roundtrip: proto::Transaction = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_eip7702_tx_roundtrip() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 103),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Eip7702(
+                proto::TransactionEip7702 {
+                    chain_id: 1,
+                    nonce: 20,
+                    gas_limit: 200_000u64.to_le_bytes().to_vec(),
+                    max_fee_per_gas: 60_000_000_000u128.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: 3_000_000_000u128.to_le_bytes().to_vec(),
+                    to: dummy_bytes(ADDR_SIZE, 30),
+                    value: U256::from(0u64).to_le_bytes_vec(),
+                    access_list: test_access_list(),
+                    authorization_list: vec![proto::AuthorizationListItem {
+                        authorization: Some(proto::Authorization {
+                            chain_id: U256::from(1u64).to_le_bytes_vec(),
+                            address: dummy_bytes(ADDR_SIZE, 40),
+                            nonce: 0,
+                        }),
+                        signature: Some(test_eth_signature()),
+                    }],
+                    input: vec![0xff],
+                },
+            )),
+        };
+        let domain: TempoTxEnvelope = (&original).try_into().unwrap();
+        let roundtrip: proto::Transaction = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_tempo_tx_roundtrip() {
+        let secp_sig = proto::PrimitiveSignature {
+            signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                test_eth_signature(),
+            )),
+        };
+        let tempo_sig = proto::TempoSignature {
+            signature: Some(proto::tempo_signature::Signature::Primitive(
+                secp_sig.clone(),
+            )),
+        };
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 104),
+            signature: Some(proto::transaction::Signature::TempoSignature(
+                tempo_sig.clone(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Tempo(
+                proto::TransactionTempo {
+                    chain_id: 1,
+                    max_fee_per_gas: 50_000_000_000u128.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: 2_000_000_000u128.to_le_bytes().to_vec(),
+                    gas_limit: 100_000,
+                    calls: vec![proto::Call {
+                        to: Some(test_tx_kind_call()),
+                        value: U256::from(1000u64).to_le_bytes::<32>().to_vec(),
+                        input: vec![0xde, 0xad],
+                    }],
+                    access_list: test_access_list(),
+                    nonce_key: U256::from(0u64).to_le_bytes::<32>().to_vec(),
+                    nonce: 1,
+                    fee_token: Some(dummy_bytes(ADDR_SIZE, 80)),
+                    fee_payer_signature: Some(test_eth_signature()),
+                    valid_before: Some(2_000_000_000),
+                    valid_after: Some(1_600_000_000),
+                    key_authorization: Some(proto::KeyAuthorization {
+                        chain_id: 1,
+                        key_type: proto::SignatureType::Secp256k1 as i32,
+                        key_id: dummy_bytes(ADDR_SIZE, 90),
+                        expiry: Some(2_000_000_000),
+                        limits: Some(proto::TokenLimits {
+                            items: vec![proto::TokenLimit {
+                                token: dummy_bytes(ADDR_SIZE, 91),
+                                limit: U256::from(1_000_000u64).to_le_bytes::<32>().to_vec(),
+                            }],
+                        }),
+                        signature: Some(secp_sig),
+                    }),
+                    aa_authorization_list: vec![proto::TempoAuthorization {
+                        chain_id: U256::from(1u64).to_le_bytes_vec(),
+                        address: dummy_bytes(ADDR_SIZE, 95),
+                        nonce: 0,
+                        signature: Some(tempo_sig),
+                    }],
+                },
+            )),
+        };
+        let domain: TempoTxEnvelope = (&original).try_into().unwrap();
+        let roundtrip: proto::Transaction = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    // ==================== Signature tests ====================
+
+    #[test]
+    fn test_secp256k1_signature_roundtrip() {
+        let original = proto::PrimitiveSignature {
+            signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                test_eth_signature(),
+            )),
+        };
+        let domain: PrimitiveSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::PrimitiveSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_p256_signature_roundtrip() {
+        let original = proto::PrimitiveSignature {
+            signature: Some(proto::primitive_signature::Signature::P256(
+                proto::P256SignatureWithPreHash {
+                    r: dummy_bytes(HASH_SIZE, 1),
+                    s: dummy_bytes(HASH_SIZE, 2),
+                    pub_key_x: dummy_bytes(HASH_SIZE, 3),
+                    pub_key_y: dummy_bytes(HASH_SIZE, 4),
+                    pre_hash: true,
+                },
+            )),
+        };
+        let domain: PrimitiveSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::PrimitiveSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_webauthn_signature_roundtrip() {
+        let original = proto::PrimitiveSignature {
+            signature: Some(proto::primitive_signature::Signature::Webauthn(
+                proto::WebAuthnSignature {
+                    r: dummy_bytes(HASH_SIZE, 10),
+                    s: dummy_bytes(HASH_SIZE, 20),
+                    pub_key_x: dummy_bytes(HASH_SIZE, 30),
+                    pub_key_y: dummy_bytes(HASH_SIZE, 40),
+                    webauthn_data: vec![0x01, 0x02, 0x03, 0x04],
+                },
+            )),
+        };
+        let domain: PrimitiveSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::PrimitiveSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_tempo_signature_primitive_roundtrip() {
+        let original = proto::TempoSignature {
+            signature: Some(proto::tempo_signature::Signature::Primitive(
+                proto::PrimitiveSignature {
+                    signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                        test_eth_signature(),
+                    )),
+                },
+            )),
+        };
+        let domain: TempoSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::TempoSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_tempo_signature_keychain_v1_roundtrip() {
+        let original = proto::TempoSignature {
+            signature: Some(proto::tempo_signature::Signature::Keychain(
+                proto::KeychainSignature {
+                    user_address: dummy_bytes(ADDR_SIZE, 1),
+                    signature: Some(proto::PrimitiveSignature {
+                        signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                            test_eth_signature(),
+                        )),
+                    }),
+                    version: proto::KeychainVersion::V1 as i32,
+                },
+            )),
+        };
+        let domain: TempoSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::TempoSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_tempo_signature_keychain_v2_roundtrip() {
+        let original = proto::TempoSignature {
+            signature: Some(proto::tempo_signature::Signature::Keychain(
+                proto::KeychainSignature {
+                    user_address: dummy_bytes(ADDR_SIZE, 1),
+                    signature: Some(proto::PrimitiveSignature {
+                        signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                            test_eth_signature(),
+                        )),
+                    }),
+                    version: proto::KeychainVersion::V2 as i32,
+                },
+            )),
+        };
+        let domain: TempoSignature = (&original).try_into().unwrap();
+        let roundtrip: proto::TempoSignature = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    // ==================== Receipt tests ====================
+
+    #[test]
+    fn test_receipt_roundtrip() {
+        let original = proto::NonEmptyReceipt {
+            tx_type: proto::TxType::Eip1559 as i32,
+            success: true,
+            cumulative_gas_used: 21_000,
+            logs: vec![proto::Log {
+                address: dummy_bytes(ADDR_SIZE, 1),
+                data: Some(proto::LogData {
+                    topics: vec![dummy_bytes(HASH_SIZE, 10), dummy_bytes(HASH_SIZE, 20)],
+                    data: vec![0xaa, 0xbb, 0xcc],
+                }),
+            }],
+        };
+        let domain: tempo_primitives::TempoReceipt = (&original).try_into().unwrap();
+        let roundtrip: proto::NonEmptyReceipt = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_receipt_all_tx_types() {
+        for (proto_type, expected_back) in [
+            (proto::TxType::Legacy, proto::TxType::Legacy),
+            (proto::TxType::Eip2930, proto::TxType::Eip2930),
+            (proto::TxType::Eip1559, proto::TxType::Eip1559),
+            (proto::TxType::Eip7702, proto::TxType::Eip7702),
+            (proto::TxType::Tempo, proto::TxType::Tempo),
+        ] {
+            let original = proto::NonEmptyReceipt {
+                tx_type: proto_type as i32,
+                success: true,
+                cumulative_gas_used: 0,
+                logs: vec![],
+            };
+            let domain: tempo_primitives::TempoReceipt = (&original).try_into().unwrap();
+            let roundtrip: proto::NonEmptyReceipt = (&domain).try_into().unwrap();
+            assert_eq!(roundtrip.tx_type, expected_back as i32);
+        }
+    }
+
+    // ==================== Supporting type tests ====================
+
+    #[test]
+    fn test_tx_kind_create_roundtrip() {
+        let original = proto::TxKind {
+            kind: Some(proto::tx_kind::Kind::Create(())),
+        };
+        let domain: alloy_primitives::TxKind = (&original).try_into().unwrap();
+        let roundtrip: proto::TxKind = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_tx_kind_call_roundtrip() {
+        let original = test_tx_kind_call();
+        let domain: alloy_primitives::TxKind = (&original).try_into().unwrap();
+        let roundtrip: proto::TxKind = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_access_list_item_roundtrip() {
+        let original = proto::AccessListItem {
+            address: dummy_bytes(ADDR_SIZE, 1),
+            storage_keys: vec![dummy_bytes(HASH_SIZE, 2), dummy_bytes(HASH_SIZE, 3)],
+        };
+        let domain: alloy_eips::eip2930::AccessListItem = (&original).try_into().unwrap();
+        let roundtrip: proto::AccessListItem = (&domain).into();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_account_info_roundtrip() {
+        let original = proto::AccountInfo {
+            balance: U256::from(1_000_000u64).to_le_bytes_vec(),
+            nonce: 5,
+            code_hash: dummy_bytes(HASH_SIZE, 1),
+            code: None,
+        };
+        let domain: reth::revm::state::AccountInfo = (&original).try_into().unwrap();
+        let roundtrip: proto::AccountInfo = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_account_status_roundtrip() {
+        let statuses = [
+            proto::AccountStatus::LoadedNotExisting,
+            proto::AccountStatus::Loaded,
+            proto::AccountStatus::LoadedEmptyEip161,
+            proto::AccountStatus::InMemoryChange,
+            proto::AccountStatus::Changed,
+            proto::AccountStatus::Destroyed,
+            proto::AccountStatus::DestroyedChanged,
+            proto::AccountStatus::DestroyedAgain,
+        ];
+        for status in statuses {
+            let domain: reth::revm::db::AccountStatus = status.into();
+            let roundtrip = proto::AccountStatus::from(domain);
+            assert_eq!(status, roundtrip);
+        }
+    }
+
+    #[test]
+    fn test_bundle_account_roundtrip() {
+        let original = proto::BundleAccount {
+            address: dummy_bytes(ADDR_SIZE, 1),
+            info: Some(proto::AccountInfo {
+                balance: U256::from(500u64).to_le_bytes_vec(),
+                nonce: 1,
+                code_hash: dummy_bytes(HASH_SIZE, 2),
+                code: None,
+            }),
+            original_info: None,
+            storage: vec![proto::StorageSlot {
+                key: U256::from(0u64).to_le_bytes_vec(),
+                previous_or_original_value: U256::from(0u64).to_le_bytes_vec(),
+                present_value: U256::from(42u64).to_le_bytes_vec(),
+            }],
+            status: proto::AccountStatus::Changed as i32,
+        };
+        let (address, account): (Address, reth::revm::db::BundleAccount) =
+            (&original).try_into().unwrap();
+        let roundtrip: proto::BundleAccount = (address, &account).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_revert_do_nothing_roundtrip() {
+        let original = proto::Revert {
+            address: dummy_bytes(ADDR_SIZE, 1),
+            account: Some(proto::AccountInfoRevert {
+                revert: Some(proto::account_info_revert::Revert::DoNothing(())),
+            }),
+            storage: vec![],
+            previous_status: proto::AccountStatus::Loaded as i32,
+            wipe_storage: false,
+        };
+        let (address, revert): (Address, reth::revm::db::states::reverts::AccountRevert) =
+            (&original).try_into().unwrap();
+        let roundtrip: proto::Revert = (address, &revert).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_revert_delete_roundtrip() {
+        let original = proto::Revert {
+            address: dummy_bytes(ADDR_SIZE, 1),
+            account: Some(proto::AccountInfoRevert {
+                revert: Some(proto::account_info_revert::Revert::DeleteIt(())),
+            }),
+            storage: vec![proto::RevertToSlot {
+                key: U256::from(1u64).to_le_bytes_vec(),
+                revert: Some(proto::revert_to_slot::Revert::Destroyed(())),
+            }],
+            previous_status: proto::AccountStatus::Destroyed as i32,
+            wipe_storage: true,
+        };
+        let (address, revert): (Address, reth::revm::db::states::reverts::AccountRevert) =
+            (&original).try_into().unwrap();
+        let roundtrip: proto::Revert = (address, &revert).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_revert_to_account_roundtrip() {
+        let original = proto::Revert {
+            address: dummy_bytes(ADDR_SIZE, 1),
+            account: Some(proto::AccountInfoRevert {
+                revert: Some(proto::account_info_revert::Revert::RevertTo(
+                    proto::AccountInfo {
+                        balance: U256::from(100u64).to_le_bytes_vec(),
+                        nonce: 0,
+                        code_hash: dummy_bytes(HASH_SIZE, 5),
+                        code: None,
+                    },
+                )),
+            }),
+            storage: vec![proto::RevertToSlot {
+                key: U256::from(0u64).to_le_bytes_vec(),
+                revert: Some(proto::revert_to_slot::Revert::Some(
+                    U256::from(99u64).to_le_bytes_vec(),
+                )),
+            }],
+            previous_status: proto::AccountStatus::Changed as i32,
+            wipe_storage: false,
+        };
+        let (address, revert): (Address, reth::revm::db::states::reverts::AccountRevert) =
+            (&original).try_into().unwrap();
+        let roundtrip: proto::Revert = (address, &revert).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    #[test]
+    fn test_bytecode_eip7702_roundtrip() {
+        let original = proto::Bytecode {
+            bytecode: Some(proto::bytecode::Bytecode::Eip7702(
+                proto::Eip7702Bytecode {
+                    delegated_address: dummy_bytes(ADDR_SIZE, 1),
+                    version: 0,
+                    raw: vec![0xef, 0x01, 0x00],
+                },
+            )),
+        };
+        let domain: reth::revm::state::Bytecode = (&original).try_into().unwrap();
+        let roundtrip: proto::Bytecode = (&domain).try_into().unwrap();
+        assert_eq!(original, roundtrip);
+    }
+
+    // ==================== Error case tests ====================
+
+    #[test]
+    fn test_invalid_signature_y_parity() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 100),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                proto::Signature {
+                    r: U256::from(1u64).to_le_bytes_vec(),
+                    s: U256::from(2u64).to_le_bytes_vec(),
+                    y_parity: 5,
+                },
+            )),
+            transaction: Some(proto::transaction::Transaction::Legacy(
+                proto::TransactionLegacy {
+                    chain_id: Some(1),
+                    nonce: 0,
+                    gas_price: 1u128.to_le_bytes().to_vec(),
+                    gas_limit: 21_000u64.to_le_bytes().to_vec(),
+                    to: Some(test_tx_kind_call()),
+                    value: U256::from(0u64).to_le_bytes_vec(),
+                    input: vec![],
+                },
+            )),
+        };
+        let result: eyre::Result<TempoTxEnvelope> = (&original).try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_transaction() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 100),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: None,
+        };
+        let result: eyre::Result<TempoTxEnvelope> = (&original).try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wrong_signature_type_for_tempo_tx() {
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 104),
+            signature: Some(proto::transaction::Signature::EthSignature(
+                test_eth_signature(),
+            )),
+            transaction: Some(proto::transaction::Transaction::Tempo(
+                proto::TransactionTempo {
+                    chain_id: 1,
+                    max_fee_per_gas: 1u128.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: 1u128.to_le_bytes().to_vec(),
+                    gas_limit: 21_000,
+                    calls: vec![],
+                    access_list: vec![],
+                    nonce_key: U256::from(0u64).to_le_bytes::<32>().to_vec(),
+                    nonce: 0,
+                    fee_token: None,
+                    fee_payer_signature: None,
+                    valid_before: None,
+                    valid_after: None,
+                    key_authorization: None,
+                    aa_authorization_list: vec![],
+                },
+            )),
+        };
+        let result: eyre::Result<TempoTxEnvelope> = (&original).try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wrong_signature_type_for_eth_tx() {
+        let tempo_sig = proto::TempoSignature {
+            signature: Some(proto::tempo_signature::Signature::Primitive(
+                proto::PrimitiveSignature {
+                    signature: Some(proto::primitive_signature::Signature::Secp256k1(
+                        test_eth_signature(),
+                    )),
+                },
+            )),
+        };
+        let original = proto::Transaction {
+            hash: dummy_bytes(HASH_SIZE, 100),
+            signature: Some(proto::transaction::Signature::TempoSignature(tempo_sig)),
+            transaction: Some(proto::transaction::Transaction::Legacy(
+                proto::TransactionLegacy {
+                    chain_id: Some(1),
+                    nonce: 0,
+                    gas_price: 1u128.to_le_bytes().to_vec(),
+                    gas_limit: 21_000u64.to_le_bytes().to_vec(),
+                    to: Some(test_tx_kind_call()),
+                    value: U256::from(0u64).to_le_bytes_vec(),
+                    input: vec![],
+                },
+            )),
+        };
+        let result: eyre::Result<TempoTxEnvelope> = (&original).try_into();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_empty_receipt_error() {
+        let original = proto::Receipt {
+            receipt: Some(proto::receipt::Receipt::Empty(())),
+        };
+        let result: eyre::Result<tempo_primitives::TempoReceipt> = (&original).try_into();
+        assert!(result.is_err());
     }
 }
