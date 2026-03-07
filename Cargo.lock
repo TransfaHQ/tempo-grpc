@@ -11132,6 +11132,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempo-eyre"
+version = "1.4.0"
+source = "git+https://github.com/tempoxyz/tempo.git?tag=v1.4.0#b55396b4ac925486a20ad53815b4df7e87020814"
+dependencies = [
+ "eyre",
+ "indenter",
+]
+
+[[package]]
 name = "tempo-grpc"
 version = "0.1.0"
 dependencies = [
@@ -11144,6 +11153,7 @@ dependencies = [
  "prost",
  "reth",
  "reth-cli-util",
+ "reth-ethereum",
  "reth-ethereum-cli",
  "reth-exex",
  "reth-node-ethereum",
@@ -11153,6 +11163,7 @@ dependencies = [
  "tempo-chainspec",
  "tempo-consensus",
  "tempo-evm",
+ "tempo-eyre",
  "tempo-node",
  "tempo-primitives",
  "tokio",

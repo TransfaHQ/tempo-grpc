@@ -19,6 +19,7 @@ use tempo_evm::TempoEvmConfig;
 use tempo_node::{TempoNodeArgs, node::TempoNode};
 
 mod convert;
+mod defaults;
 mod exex;
 mod server;
 use exex::ExEx;
@@ -49,7 +50,16 @@ fn main() -> eyre::Result<()> {
         .expect("Failed to install default rustls crypto provider");
 
     reth_cli_util::sigsegv_handler::install();
+
+    tempo_eyre::install()
+        .expect("must install the eyre error hook before constructing any eyre reports");
+
+    if std::env::var_os("RUST_BACKTRACE").is_none() {
+        unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+    }
+
     tempo_node::init_version_metadata();
+    defaults::init_defaults();
 
     let cli = Cli::<TempoChainSpecParser, TempoArgs, DefaultRpcModuleValidator, NoSubCmd>::parse();
     let components =
