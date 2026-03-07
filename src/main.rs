@@ -1,6 +1,9 @@
 use clap::Parser;
 use reth_tracing::tracing::info;
-use std::sync::Arc;
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 use tonic::transport::Server;
 
 use eyre::Context;
@@ -27,6 +30,12 @@ struct TempoArgs {
     #[arg(long, value_name = "URL", default_missing_value = "auto", num_args(0..=1), env = "TEMPO_FOLLOW")]
     pub follow: Option<String>,
 
+    #[arg(long = "grpc.addr", default_value = "127.0.0.1")]
+    pub grpc_addr: IpAddr,
+
+    #[arg(long = "grpc.port", default_value = "50051")]
+    pub grpc_port: u16,
+
     #[command(flatten)]
     pub node_args: TempoNodeArgs,
 }
@@ -48,7 +57,7 @@ fn main() -> eyre::Result<()> {
             .add_service(RemoteExExServer::new(RemoteExExService {
                 exex_notifications: notifications_tx.clone(),
             }))
-            .serve("[::1]:50051".parse()?);
+            .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
         let handle = builder
             .node(TempoNode::new(&args.node_args, None))
             .apply(|mut builder: WithLaunchContext<_>| {
