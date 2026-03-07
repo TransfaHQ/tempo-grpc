@@ -1,3 +1,6 @@
+#[global_allocator]
+static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
+
 use clap::Parser;
 use reth_tracing::tracing::info;
 use std::{
@@ -46,6 +49,7 @@ fn main() -> eyre::Result<()> {
         .expect("Failed to install default rustls crypto provider");
 
     reth_cli_util::sigsegv_handler::install();
+    tempo_node::init_version_metadata();
 
     let cli = Cli::<TempoChainSpecParser, TempoArgs, DefaultRpcModuleValidator, NoSubCmd>::parse();
     let components =
