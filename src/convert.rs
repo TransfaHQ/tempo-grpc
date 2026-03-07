@@ -364,7 +364,7 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::Transaction {
                     fee_token: tx.fee_token.map(|ft| ft.to_vec()),
                     fee_payer_signature: tx.fee_payer_signature.map(|sig| (&sig).into()),
                     valid_before: tx.valid_before,
-                    valid_after: tx.valid_before,
+                    valid_after: tx.valid_after,
                     key_authorization: tx.key_authorization.as_ref().map(|ka| {
                         proto::KeyAuthorization {
                             chain_id: ka.chain_id,
@@ -432,7 +432,7 @@ impl From<&PrimitiveSignature> for proto::PrimitiveSignature {
             PrimitiveSignature::P256(s) => {
                 let inner_signature = proto::P256SignatureWithPreHash {
                     r: s.r.to_vec(),
-                    s: s.r.to_vec(),
+                    s: s.s.to_vec(),
                     pub_key_x: s.pub_key_x.to_vec(),
                     pub_key_y: s.pub_key_y.to_vec(),
                     pre_hash: s.pre_hash,
@@ -442,7 +442,7 @@ impl From<&PrimitiveSignature> for proto::PrimitiveSignature {
             PrimitiveSignature::WebAuthn(s) => {
                 let inner_signature = proto::WebAuthnSignature {
                     r: s.r.to_vec(),
-                    s: s.r.to_vec(),
+                    s: s.s.to_vec(),
                     pub_key_x: s.pub_key_x.to_vec(),
                     pub_key_y: s.pub_key_y.to_vec(),
                     webauthn_data: s.webauthn_data.to_vec(),
@@ -939,7 +939,7 @@ impl TryFrom<&proto::Transaction> for tempo_primitives::TempoTxEnvelope {
                         .map(TryInto::try_into)
                         .transpose()?,
                     valid_before: t.valid_before,
-                    valid_after: t.valid_before,
+                    valid_after: t.valid_after,
                     key_authorization: t
                         .key_authorization
                         .as_ref()
@@ -1482,7 +1482,7 @@ impl TryFrom<&proto::NonEmptyReceipt> for tempo_primitives::TempoReceipt {
                 proto::TxType::Eip2930 => tempo_primitives::TempoTxType::Eip2930,
                 proto::TxType::Eip1559 => tempo_primitives::TempoTxType::Eip1559,
                 proto::TxType::Eip7702 => tempo_primitives::TempoTxType::Eip7702,
-                proto::TxType::Tempo => tempo_primitives::TempoTxType::Eip7702,
+                proto::TxType::Tempo => tempo_primitives::TempoTxType::AA,
             },
             success: receipt.success,
             cumulative_gas_used: receipt.cumulative_gas_used,
