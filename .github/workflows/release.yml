@@ -31,7 +31,7 @@ env:
 jobs:
   get-version:
     name: Get Version
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions: {}
     outputs:
       version: ${{ steps.get_version.outputs.version }}
@@ -60,7 +60,7 @@ jobs:
         platform:
           - os: depot-ubuntu-latest-16
             target: x86_64-unknown-linux-gnu
-          - os: depot-ubuntu-latest-arm-16
+          - os: blacksmith-16vcpu-ubuntu-2404-arm
             target: aarch64-unknown-linux-gnu
           - os: depot-macos-15
             target: aarch64-apple-darwin
@@ -133,7 +133,7 @@ jobs:
     name: Create Release
     needs: [get-version, build-release]
     if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
       actions: read
