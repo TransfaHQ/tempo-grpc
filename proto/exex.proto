@@ -9,6 +9,10 @@ service RemoteExEx {
   rpc Subscribe(SubscribeRequest) returns (stream ExExNotification) {}
 }
 
+service BlockStream {
+  rpc Subscribe(SubscribeRequest) returns (stream RpcBlock) {}
+}
+
 message SubscribeRequest {}
 
 message ExExNotification {
@@ -43,6 +47,66 @@ message Block {
   repeated Header ommers = 3;
   repeated bytes senders = 4;
   optional Withdrawals withdrawals = 5;
+}
+
+message RpcBlock {
+  bytes hash = 1;
+  bytes parent_hash = 2;
+  bytes ommers_hash = 3;
+  bytes miner = 4;
+  bytes state_root = 5;
+  bytes transactions_root = 6;
+  bytes receipts_root = 7;
+  bytes logs_bloom = 8;
+  bytes difficulty = 9;
+  uint64 number = 10;
+  uint64 gas_limit = 11;
+  uint64 gas_used = 12;
+  uint64 timestamp = 13;
+  bytes mix_hash = 14;
+  bytes nonce = 15;
+  optional uint64 base_fee_per_gas = 16;
+  optional uint64 blob_gas_used = 17;
+  optional uint64 excess_blob_gas = 18;
+  optional bytes parent_beacon_block_root = 19;
+  uint64 general_gas_limit = 20;
+  uint64 shared_gas_limit = 21;
+  uint64 timestamp_millis_part = 22;
+  bytes extra_data = 23;
+  optional bytes requests_hash = 24;
+  uint64 size = 25;
+  uint64 timestamp_millis = 26;
+  optional bytes withdrawals_root = 27;
+  repeated bytes uncles = 28;
+  repeated RpcTransaction transactions = 29;
+  optional Withdrawals withdrawals = 30;
+  BlockStatus status = 31;
+}
+
+message RpcTransaction {
+  uint64 index = 1;
+  bytes sender = 2;
+  Transaction transaction = 3;
+  RpcReceipt receipt = 4;
+}
+
+message RpcReceipt {
+  optional bytes contract_address = 1;
+  uint64 cumulative_gas_used = 2;
+  bytes effective_gas_price = 3;
+  bytes fee_payer = 4;
+  optional bytes fee_token = 5;
+  uint64 gas_used = 6;
+  repeated Log logs = 7;
+  bytes logs_bloom = 8;
+  bool success = 9;
+  TxType tx_type = 10;
+}
+
+enum BlockStatus {
+  COMMITTED = 0;
+  REORGED = 1;
+  REVERTED = 2;
 }
 
 message Withdrawals {

@@ -18,14 +18,17 @@ use tempo_consensus::TempoConsensus;
 use tempo_evm::TempoEvmConfig;
 use tempo_node::{TempoNodeArgs, node::TempoNode};
 
-mod convert;
+mod codec;
 mod defaults;
 mod exex;
 mod server;
 use exex::ExEx;
 use tokio::sync::broadcast;
 
-use crate::server::{RemoteExExService, proto::remote_ex_ex_server::RemoteExExServer};
+use crate::server::{
+    BlockStreamService, RemoteExExService,
+    proto::{block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer},
+};
 
 #[derive(Debug, Clone, clap::Args)]
 struct TempoArgs {
@@ -68,7 +71,14 @@ fn main() -> eyre::Result<()> {
         let (notifications_tx, _) = broadcast::channel(1);
         let notifications_tx = Arc::new(notifications_tx);
         let server = Server::builder()
-            .add_service(RemoteExExServer::new(RemoteExExService {
+            .add_service(
+                RemoteExExServer::new(RemoteExExService {
+                    exex_notifications: notifications_tx.clone(),
+                })
+                .max_encoding_message_size(usize::MAX)
+                .max_decoding_message_size(usize::MAX),
+            )
+            .add_service(BlockStreamServer::new(BlockStreamService {
                 exex_notifications: notifications_tx.clone(),
             }))
             .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));

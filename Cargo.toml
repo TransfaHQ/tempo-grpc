@@ -35,6 +35,29 @@ tonic-prost = "*"
 [build-dependencies]
 tonic-prost-build = "*"
 
+[features]
+default = ["asm-keccak", "jemalloc", "otlp"]
+
+asm-keccak = [
+	"alloy-primitives/asm-keccak",
+	"tempo-node/asm-keccak",
+	"reth-ethereum-cli/asm-keccak",
+]
+
+jemalloc = [
+	"reth-cli-util/jemalloc",
+	"reth-ethereum-cli/jemalloc",
+	"reth-ethereum/jemalloc",
+	"tempo-node/jemalloc",
+]
+
+otlp = [
+	"reth-ethereum-cli/otlp",
+	"reth-ethereum-cli/otlp-logs",
+	"reth-ethereum/otlp",
+	"tempo-node/otlp",
+]
+
 [profile.release]
 opt-level = 3
 lto = "thin"
