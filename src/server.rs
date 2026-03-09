@@ -34,9 +34,10 @@ impl RemoteExEx for RemoteExExService {
 
         tokio::spawn(async move {
             while let Ok(notification) = receiver.recv().await {
-                tx.send(Ok((&notification).try_into().expect("failed to encode")))
-                    .await
-                    .expect("failed to send notification to client");
+                let msg = (&notification).try_into().expect("failed to encode");
+                if tx.send(Ok(msg)).await.is_err() {
+                    break;
+                }
             }
         });
         Ok(Response::new(ReceiverStream::new(rx)))
@@ -78,9 +79,9 @@ impl BlockStream for BlockStreamService {
                     }
                 };
                 for block in blocks {
-                    tx.send(Ok(block))
-                        .await
-                        .expect("failed to send notification to client");
+                    if tx.send(Ok(block)).await.is_err() {
+                        return;
+                    }
                 }
             }
         });
