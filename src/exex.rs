@@ -37,7 +37,7 @@ where
                     .events
                     .send(ExExEvent::FinishedHeight(committed_chain.tip().num_hash()))?;
             };
-            self.notifications_tx.send(notification)?;
+            let _ = self.notifications_tx.send(notification);
         }
         Ok(())
     }
