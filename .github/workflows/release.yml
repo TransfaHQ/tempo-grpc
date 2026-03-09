@@ -1,0 +1,168 @@
+name: Release
+
+permissions: {}
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v0.1.0)"
+        required: true
+        type: string
+      profile:
+        description: "Build profile"
+        default: "release"
+        type: choice
+        options:
+          - "release"
+      dry_run:
+        description: "Dry run (build binaries without creating release)"
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+  RUSTC_WRAPPER: "sccache"
+
+jobs:
+  get-version:
+    name: Get Version
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "version=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-release:
+    name: Build Release Binaries
+    needs: get-version
+    runs-on: ${{ matrix.platform.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - os: depot-ubuntu-latest-16
+            target: x86_64-unknown-linux-gnu
+          - os: depot-ubuntu-latest-arm-16
+            target: aarch64-unknown-linux-gnu
+          - os: depot-macos-15
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Setup mold linker
+        uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+
+      - name: Install protobuf compiler
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y protobuf-compiler
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            brew install protobuf
+          fi
+        shell: bash
+
+      - name: Build binary
+        run: cargo build --bin tempo-grpc --features "asm-keccak,jemalloc,otlp" --profile release --target ${{ matrix.platform.target }}
+        env:
+          CARGO_TARGET_DIR: target
+
+      - name: Prepare binary
+        id: prepare
+        shell: bash
+        env:
+          VERSION: ${{ needs.get-version.outputs.version }}
+          TARGET: ${{ matrix.platform.target }}
+        run: |
+          BINARY_PATH="target/${TARGET}/release/tempo-grpc"
+          BINARY_NAME="tempo-grpc-${VERSION}-${TARGET}"
+          ARCHIVE_NAME="tempo-grpc-${VERSION}-${TARGET}.tar.gz"
+
+          cp "$BINARY_PATH" "$BINARY_NAME"
+          tar czf "$ARCHIVE_NAME" "$BINARY_NAME"
+
+          echo "archive_name=$ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+          echo "archive_path=$ARCHIVE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate checksums
+        shell: bash
+        env:
+          ARCHIVE_PATH: ${{ steps.prepare.outputs.archive_path }}
+        run: |
+          shasum -a 256 "$ARCHIVE_PATH" > "${ARCHIVE_PATH}.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempo-grpc-${{ matrix.platform.target }}
+          path: |
+            ${{ steps.prepare.outputs.archive_path }}
+            ${{ steps.prepare.outputs.archive_name }}.sha256
+          if-no-files-found: error
+
+  create-release:
+    name: Create Release
+    needs: [get-version, build-release]
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.get-version.outputs.version }}
+        run: |
+          PRERELEASE=""
+          if echo "$VERSION" | grep -qE '(alpha|beta|rc)'; then
+            PRERELEASE="--prerelease"
+          fi
+
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Release $VERSION" \
+            --draft \
+            --notes "" \
+            $PRERELEASE \
+            artifacts/**/*
