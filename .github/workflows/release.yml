@@ -62,8 +62,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: depot-ubuntu-latest-arm-16
             target: aarch64-unknown-linux-gnu
-          - os: depot-macos-15
-            target: aarch64-apple-darwin
 
     steps:
       - name: Checkout repository
