@@ -2,6 +2,7 @@
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
 use clap::Parser;
+use reth_exex::BackfillJobFactory;
 use reth_tracing::tracing::info;
 use std::{
     net::{IpAddr, SocketAddr},
@@ -73,19 +74,7 @@ fn main() -> eyre::Result<()> {
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
             .build_v1()?;
-        let server = Server::builder()
-            .add_service(reflection_service)
-            .add_service(
-                RemoteExExServer::new(RemoteExExService {
-                    exex_notifications: notifications_tx.clone(),
-                })
-                .max_encoding_message_size(usize::MAX)
-                .max_decoding_message_size(usize::MAX),
-            )
-            .add_service(BlockStreamServer::new(BlockStreamService {
-                exex_notifications: notifications_tx.clone(),
-            }))
-            .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
+
         let handle = builder
             .node(TempoNode::new(&args.node_args, None))
             .apply(|mut builder: WithLaunchContext<_>| {
@@ -108,16 +97,41 @@ fn main() -> eyre::Result<()> {
                 }
                 builder
             })
-            .install_exex("grpc-exex", |ctx| async move {
-                let exex = ExEx {
-                    ctx,
-                    notifications_tx,
-                };
-                Ok(exex.start())
+            .install_exex("grpc-exex", {
+                let notifications_tx = notifications_tx.clone();
+                |ctx| async move {
+                    let exex = ExEx {
+                        ctx,
+                        notifications_tx,
+                    };
+                    Ok(exex.start())
+                }
             })
             .launch_with_debug_capabilities()
             .await
             .wrap_err("failed launching execution node")?;
+
+        let server = Server::builder()
+            .add_service(reflection_service)
+            .add_service(
+                RemoteExExServer::new(RemoteExExService {
+                    exex_notifications: notifications_tx.clone(),
+                    backfill_job_factory: BackfillJobFactory::new(
+                        handle.node.evm_config().clone(),
+                        handle.node.provider().clone(),
+                    ),
+                })
+                .max_encoding_message_size(usize::MAX)
+                .max_decoding_message_size(usize::MAX),
+            )
+            .add_service(BlockStreamServer::new(BlockStreamService {
+                exex_notifications: notifications_tx.clone(),
+                backfill_job_factory: BackfillJobFactory::new(
+                    handle.node.evm_config().clone(),
+                    handle.node.provider().clone(),
+                ),
+            }))
+            .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
         handle
             .node
             .task_executor

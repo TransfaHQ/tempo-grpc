@@ -7,13 +7,20 @@ import "google/protobuf/empty.proto";
 
 service RemoteExEx {
   rpc Subscribe(SubscribeRequest) returns (stream ExExNotification) {}
+  rpc Backfill(BackfillRequest) returns (stream Chain) {}
 }
 
 service BlockStream {
   rpc Subscribe(SubscribeRequest) returns (stream RpcBlock) {}
+  rpc Backfill(BackfillRequest) returns (stream RpcBlock) {}
 }
 
 message SubscribeRequest {}
+
+message BackfillRequest {
+  uint64 from = 1;
+  uint64 to = 2;
+}
 
 message ExExNotification {
   oneof notification {
