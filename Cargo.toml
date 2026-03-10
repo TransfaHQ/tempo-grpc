@@ -30,6 +30,7 @@ tokio = "1.50.0"
 tokio-stream = "0.1"
 prost = "0.14.3"
 tonic = "0.14.5"
+tonic-reflection = "0.14.5"
 tonic-prost = "*"
 
 [build-dependencies]

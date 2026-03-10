@@ -27,7 +27,7 @@ use tokio::sync::broadcast;
 
 use crate::server::{
     BlockStreamService, RemoteExExService,
-    proto::{block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer},
+    proto::{self, block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer},
 };
 
 #[derive(Debug, Clone, clap::Args)]
@@ -70,7 +70,11 @@ fn main() -> eyre::Result<()> {
     cli.run_with_components::<TempoNode>(components, async move |builder, args| {
         let (notifications_tx, _) = broadcast::channel(1);
         let notifications_tx = Arc::new(notifications_tx);
+        let reflection_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
+            .build_v1()?;
         let server = Server::builder()
+            .add_service(reflection_service)
             .add_service(
                 RemoteExExServer::new(RemoteExExService {
                     exex_notifications: notifications_tx.clone(),
@@ -118,7 +122,10 @@ fn main() -> eyre::Result<()> {
             .node
             .task_executor
             .spawn_critical("grpc", async move {
-                info!("GRPC server started");
+                info!(
+                    "GRPC server started at {}",
+                    SocketAddr::new(args.grpc_addr, args.grpc_port)
+                );
                 server.await.expect("gRPC server crashed")
             });
 

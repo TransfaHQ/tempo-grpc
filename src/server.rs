@@ -14,6 +14,8 @@ use tonic::{Request, Response, Status};
 
 pub mod proto {
     tonic::include_proto!("exex");
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+        tonic::include_file_descriptor_set!("exex_descriptor");
 }
 
 #[derive(Debug)]
