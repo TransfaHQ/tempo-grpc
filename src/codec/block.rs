@@ -1,8 +1,8 @@
 use alloy_consensus::{BlockHeader, Transaction, TxReceipt};
 use alloy_primitives::TxKind;
-use reth::providers::Chain;
+use reth::{primitives::RecoveredBlock, providers::Chain};
 use reth_ethereum::primitives::InMemorySize;
-use tempo_primitives::{TempoPrimitives, TempoReceipt};
+use tempo_primitives::{Block as TempoBlock, TempoPrimitives, TempoReceipt};
 
 use crate::server::proto;
 
@@ -13,128 +13,138 @@ pub fn chain_to_rpc_blocks(
     chain
         .blocks_and_receipts()
         .map(|(block, receipts)| {
-            let receipts_gas_used = compute_gas_used(receipts);
-            Ok(proto::RpcBlock {
-                hash: block.hash().to_vec(),
-                parent_hash: block.parent_hash().to_vec(),
-                ommers_hash: block.ommers_hash().to_vec(),
-                miner: block.beneficiary().to_vec(),
-                state_root: block.state_root().to_vec(),
-                transactions_root: block.transactions_root().to_vec(),
-                receipts_root: block.receipts_root().to_vec(),
-                logs_bloom: block.logs_bloom().to_vec(),
-                difficulty: block.difficulty().to_le_bytes_vec(),
-                number: block.number(),
-                gas_limit: block.gas_limit(),
-                gas_used: block.gas_used(),
-                timestamp: block.timestamp(),
-                mix_hash: block.inner.mix_hash.to_vec(),
-                nonce: block.inner.nonce.to_vec(),
-                base_fee_per_gas: block.base_fee_per_gas(),
-                blob_gas_used: block.blob_gas_used(),
-                excess_blob_gas: block.excess_blob_gas(),
-                parent_beacon_block_root: block.parent_beacon_block_root().map(|i| i.to_vec()),
-                general_gas_limit: block.general_gas_limit,
-                shared_gas_limit: block.shared_gas_limit,
-                timestamp_millis_part: block.timestamp_millis_part,
-                extra_data: block.extra_data().to_vec(),
-                requests_hash: block.requests_hash().map(|i| i.to_vec()),
-                size: block.size() as u64,
-                timestamp_millis: block.timestamp_millis(),
-                withdrawals_root: block.withdrawals_root().map(|i| i.to_vec()),
-                status: status.into(),
-                uncles: block
-                    .body()
-                    .ommers
-                    .iter()
-                    .map(|h| h.inner.hash_slow().as_slice().to_vec())
-                    .collect(),
-                withdrawals: block.body().withdrawals.as_ref().map(|withdrawals| {
-                    proto::Withdrawals {
-                        items: withdrawals
-                            .iter()
-                            .map(|withdrawal| proto::Withdrawal {
-                                index: withdrawal.index,
-                                validator_index: withdrawal.validator_index,
-                                address: withdrawal.address.to_vec(),
-                                amount: withdrawal.amount,
-                            })
-                            .collect(),
-                    }
-                }),
-                transactions: block
-                    .body()
-                    .transactions()
-                    .zip(receipts)
-                    .zip(block.senders_iter())
-                    .enumerate()
-                    .map(|(i, ((tx, receipt), sender))| (i, tx, receipt, sender))
-                    .map(|(index, tx, receipt, sender)| {
-                        let contract_address = match tx.kind() {
-                            TxKind::Create => Some(sender.create(tx.nonce())),
-                            TxKind::Call(_) => None,
-                        };
-                        let effective_gas_price = tx.effective_gas_price(block.base_fee_per_gas());
-                        let gas_used = receipts_gas_used[index];
-                        // See: https://github.com/tempoxyz/tempo/blob/0f8b2ae8ba3b8164d84324e29aaeb2c8e118c476/crates/node/src/rpc/mod.rs#L471
-                        let fee_token = if gas_used == 0 || effective_gas_price == 0 {
-                            receipt.logs().last().map(|log| log.address.to_vec())
-                        } else {
-                            None
-                        };
-                        Ok(proto::RpcTransaction {
-                            index: index as u64,
-                            transaction: Some(tx.try_into()?),
-                            sender: sender.to_vec(),
-                            receipt: Some(proto::RpcReceipt {
-                                contract_address: contract_address.map(|a| a.to_vec()),
-                                cumulative_gas_used: receipt.cumulative_gas_used,
-                                effective_gas_price: effective_gas_price.to_le_bytes().to_vec(),
-                                gas_used,
-                                fee_token,
-                                fee_payer: tx.fee_payer(sender.to_owned())?.to_vec(),
-                                success: receipt.success,
-                                tx_type: match receipt.tx_type {
-                                    tempo_primitives::TempoTxType::Legacy => {
-                                        proto::TxType::Legacy.into()
-                                    }
-                                    tempo_primitives::TempoTxType::Eip2930 => {
-                                        proto::TxType::Eip2930.into()
-                                    }
-                                    tempo_primitives::TempoTxType::Eip1559 => {
-                                        proto::TxType::Eip1559.into()
-                                    }
-                                    tempo_primitives::TempoTxType::Eip7702 => {
-                                        proto::TxType::Eip7702.into()
-                                    }
-                                    tempo_primitives::TempoTxType::AA => {
-                                        proto::TxType::Tempo.into()
-                                    }
-                                },
-                                logs_bloom: receipt.bloom().to_vec(),
-                                logs: receipt
-                                    .logs
-                                    .iter()
-                                    .map(|log| proto::Log {
-                                        address: log.address.to_vec(),
-                                        data: Some(proto::LogData {
-                                            topics: log
-                                                .data
-                                                .topics()
-                                                .iter()
-                                                .map(|topic| topic.to_vec())
-                                                .collect(),
-                                            data: log.data.data.to_vec(),
-                                        }),
-                                    })
-                                    .collect(),
-                            }),
-                        })
-                    })
-                    .collect::<eyre::Result<_>>()?,
-            })
+            proto::RpcBlock::try_from_blocks_and_receipts(block, receipts, status)
         })
         .collect()
+}
+
+impl proto::RpcBlock {
+    pub fn try_from_blocks_and_receipts(
+        block: &RecoveredBlock<TempoBlock>,
+        receipts: &Vec<TempoReceipt>,
+        status: proto::BlockStatus,
+    ) -> eyre::Result<Self> {
+        let receipts_gas_used = compute_gas_used(receipts);
+        Ok(proto::RpcBlock {
+            hash: block.hash().to_vec(),
+            parent_hash: block.parent_hash().to_vec(),
+            ommers_hash: block.ommers_hash().to_vec(),
+            miner: block.beneficiary().to_vec(),
+            state_root: block.state_root().to_vec(),
+            transactions_root: block.transactions_root().to_vec(),
+            receipts_root: block.receipts_root().to_vec(),
+            logs_bloom: block.logs_bloom().to_vec(),
+            difficulty: block.difficulty().to_le_bytes_vec(),
+            number: block.number(),
+            gas_limit: block.gas_limit(),
+            gas_used: block.gas_used(),
+            timestamp: block.timestamp(),
+            mix_hash: block.inner.mix_hash.to_vec(),
+            nonce: block.inner.nonce.to_vec(),
+            base_fee_per_gas: block.base_fee_per_gas(),
+            blob_gas_used: block.blob_gas_used(),
+            excess_blob_gas: block.excess_blob_gas(),
+            parent_beacon_block_root: block.parent_beacon_block_root().map(|i| i.to_vec()),
+            general_gas_limit: block.general_gas_limit,
+            shared_gas_limit: block.shared_gas_limit,
+            timestamp_millis_part: block.timestamp_millis_part,
+            extra_data: block.extra_data().to_vec(),
+            requests_hash: block.requests_hash().map(|i| i.to_vec()),
+            size: block.size() as u64,
+            timestamp_millis: block.timestamp_millis(),
+            withdrawals_root: block.withdrawals_root().map(|i| i.to_vec()),
+            status: status.into(),
+            uncles: block
+                .body()
+                .ommers
+                .iter()
+                .map(|h| h.inner.hash_slow().as_slice().to_vec())
+                .collect(),
+            withdrawals: block
+                .body()
+                .withdrawals
+                .as_ref()
+                .map(|withdrawals| proto::Withdrawals {
+                    items: withdrawals
+                        .iter()
+                        .map(|withdrawal| proto::Withdrawal {
+                            index: withdrawal.index,
+                            validator_index: withdrawal.validator_index,
+                            address: withdrawal.address.to_vec(),
+                            amount: withdrawal.amount,
+                        })
+                        .collect(),
+                }),
+            transactions: block
+                .body()
+                .transactions()
+                .zip(receipts)
+                .zip(block.senders_iter())
+                .enumerate()
+                .map(|(i, ((tx, receipt), sender))| (i, tx, receipt, sender))
+                .map(|(index, tx, receipt, sender)| {
+                    let contract_address = match tx.kind() {
+                        TxKind::Create => Some(sender.create(tx.nonce())),
+                        TxKind::Call(_) => None,
+                    };
+                    let effective_gas_price = tx.effective_gas_price(block.base_fee_per_gas());
+                    let gas_used = receipts_gas_used[index];
+                    // See: https://github.com/tempoxyz/tempo/blob/0f8b2ae8ba3b8164d84324e29aaeb2c8e118c476/crates/node/src/rpc/mod.rs#L471
+                    let fee_token = if gas_used == 0 || effective_gas_price == 0 {
+                        receipt.logs().last().map(|log| log.address.to_vec())
+                    } else {
+                        None
+                    };
+                    Ok(proto::RpcTransaction {
+                        index: index as u64,
+                        transaction: Some(tx.try_into()?),
+                        sender: sender.to_vec(),
+                        receipt: Some(proto::RpcReceipt {
+                            contract_address: contract_address.map(|a| a.to_vec()),
+                            cumulative_gas_used: receipt.cumulative_gas_used,
+                            effective_gas_price: effective_gas_price.to_le_bytes().to_vec(),
+                            gas_used,
+                            fee_token,
+                            fee_payer: tx.fee_payer(sender.to_owned())?.to_vec(),
+                            success: receipt.success,
+                            tx_type: match receipt.tx_type {
+                                tempo_primitives::TempoTxType::Legacy => {
+                                    proto::TxType::Legacy.into()
+                                }
+                                tempo_primitives::TempoTxType::Eip2930 => {
+                                    proto::TxType::Eip2930.into()
+                                }
+                                tempo_primitives::TempoTxType::Eip1559 => {
+                                    proto::TxType::Eip1559.into()
+                                }
+                                tempo_primitives::TempoTxType::Eip7702 => {
+                                    proto::TxType::Eip7702.into()
+                                }
+                                tempo_primitives::TempoTxType::AA => proto::TxType::Tempo.into(),
+                            },
+                            logs_bloom: receipt.bloom().to_vec(),
+                            logs: receipt
+                                .logs
+                                .iter()
+                                .map(|log| proto::Log {
+                                    address: log.address.to_vec(),
+                                    data: Some(proto::LogData {
+                                        topics: log
+                                            .data
+                                            .topics()
+                                            .iter()
+                                            .map(|topic| topic.to_vec())
+                                            .collect(),
+                                        data: log.data.data.to_vec(),
+                                    }),
+                                })
+                                .collect(),
+                        }),
+                    })
+                })
+                .collect::<eyre::Result<_>>()?,
+        })
+    }
 }
 
 fn compute_gas_used(receipts: &[TempoReceipt]) -> Vec<u64> {
@@ -156,7 +166,7 @@ mod tests {
     use super::*;
     use alloy_consensus::{Header, Signed, TxEip1559, TxLegacy};
     use alloy_eips::eip4895::Withdrawal;
-    use alloy_primitives::{Address, B256, B64, Bloom, Bytes, LogData, Signature, U256};
+    use alloy_primitives::{Address, B64, B256, Bloom, Bytes, LogData, Signature, U256};
     use reth::primitives::{BlockBody, SealedBlock, SealedHeader};
     use reth::providers::{Chain, ExecutionOutcome};
     use std::collections::BTreeMap;
@@ -257,12 +267,15 @@ mod tests {
     fn make_chain(
         blocks: Vec<(
             TempoHeader,
-            B256,                              // block hash
-            Vec<(TempoTxEnvelope, Address)>,   // (tx, sender)
+            B256,                            // block hash
+            Vec<(TempoTxEnvelope, Address)>, // (tx, sender)
             Vec<TempoReceipt>,
         )>,
     ) -> Chain<TempoPrimitives> {
-        let first_block = blocks.first().map(|(h, _, _, _)| h.inner.number).unwrap_or(0);
+        let first_block = blocks
+            .first()
+            .map(|(h, _, _, _)| h.inner.number)
+            .unwrap_or(0);
         let mut recovered_blocks = Vec::new();
         let mut all_receipts = Vec::new();
 
@@ -274,8 +287,8 @@ mod tests {
                 ommers: vec![],
                 withdrawals: None,
             };
-            let block = SealedBlock::<Block>::from_sealed_parts(sealed_header, body)
-                .with_senders(senders);
+            let block =
+                SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(senders);
             recovered_blocks.push(block);
             all_receipts.push(receipts);
         }
@@ -576,12 +589,7 @@ mod tests {
         let to = TxKind::Call(Address::with_last_byte(0x02));
         let log_addr = Address::with_last_byte(0x03);
         let tx = make_legacy_tx(0, 20_000_000_000, to);
-        let receipt = make_receipt(
-            TempoTxType::Legacy,
-            true,
-            21_000,
-            vec![make_log(log_addr)],
-        );
+        let receipt = make_receipt(TempoTxType::Legacy, true, 21_000, vec![make_log(log_addr)]);
 
         let chain = make_chain(vec![(
             make_header(1, 21_000, Some(1_000_000_000)),
@@ -679,7 +687,10 @@ mod tests {
         let rpc_receipt = result[0].transactions[0].receipt.as_ref().unwrap();
         // effective = min(max_fee, base_fee + max_priority) = min(3B, 1.5B) = 1.5B
         let expected: u128 = base_fee as u128 + max_priority;
-        assert_eq!(rpc_receipt.effective_gas_price, expected.to_le_bytes().to_vec());
+        assert_eq!(
+            rpc_receipt.effective_gas_price,
+            expected.to_le_bytes().to_vec()
+        );
     }
 
     // ==================== Multi-block chain ====================
@@ -687,9 +698,24 @@ mod tests {
     #[test]
     fn test_multi_block_chain() {
         let chain = make_chain(vec![
-            (make_header(10, 0, None), B256::with_last_byte(0x10), vec![], vec![]),
-            (make_header(11, 0, None), B256::with_last_byte(0x11), vec![], vec![]),
-            (make_header(12, 0, None), B256::with_last_byte(0x12), vec![], vec![]),
+            (
+                make_header(10, 0, None),
+                B256::with_last_byte(0x10),
+                vec![],
+                vec![],
+            ),
+            (
+                make_header(11, 0, None),
+                B256::with_last_byte(0x11),
+                vec![],
+                vec![],
+            ),
+            (
+                make_header(12, 0, None),
+                B256::with_last_byte(0x12),
+                vec![],
+                vec![],
+            ),
         ]);
 
         let result = chain_to_rpc_blocks(&chain, proto::BlockStatus::Committed).unwrap();
@@ -724,8 +750,8 @@ mod tests {
                 .into(),
             ),
         };
-        let block = SealedBlock::<Block>::from_sealed_parts(sealed_header, body)
-            .with_senders(vec![]);
+        let block =
+            SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(vec![]);
 
         let chain = Chain::<TempoPrimitives>::new(
             vec![block],
@@ -769,8 +795,8 @@ mod tests {
             ommers: vec![ommer_header],
             withdrawals: None,
         };
-        let block = SealedBlock::<Block>::from_sealed_parts(sealed_header, body)
-            .with_senders(vec![]);
+        let block =
+            SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(vec![]);
 
         let chain = Chain::<TempoPrimitives>::new(
             vec![block],

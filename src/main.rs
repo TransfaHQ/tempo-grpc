@@ -124,13 +124,14 @@ fn main() -> eyre::Result<()> {
                 .max_encoding_message_size(usize::MAX)
                 .max_decoding_message_size(usize::MAX),
             )
-            .add_service(BlockStreamServer::new(BlockStreamService {
-                exex_notifications: notifications_tx.clone(),
-                backfill_job_factory: BackfillJobFactory::new(
+            .add_service(BlockStreamServer::new(BlockStreamService::new(
+                notifications_tx.clone(),
+                BackfillJobFactory::new(
                     handle.node.evm_config().clone(),
                     handle.node.provider().clone(),
                 ),
-            }))
+                handle.node.provider().clone(),
+            )))
             .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
         handle
             .node
