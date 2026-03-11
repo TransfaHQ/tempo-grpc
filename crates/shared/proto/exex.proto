@@ -12,7 +12,7 @@ service RemoteExEx {
 
 service BlockStream {
   rpc Subscribe(SubscribeRequest) returns (stream RpcBlock) {}
-  rpc Backfill(BackfillRequest) returns (stream RpcBlock) {}
+  rpc Backfill(BackfillRequest) returns (stream RpcBlocks) {}
 }
 
 message SubscribeRequest {}
@@ -54,6 +54,10 @@ message Block {
   repeated Header ommers = 3;
   repeated bytes senders = 4;
   optional Withdrawals withdrawals = 5;
+}
+
+message RpcBlocks {
+  repeated RpcBlock items = 1;
 }
 
 message RpcBlock {

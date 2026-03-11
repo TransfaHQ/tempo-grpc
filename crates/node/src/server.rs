@@ -182,7 +182,7 @@ impl Inner<TempoNodeAdapter> {
 #[tonic::async_trait]
 impl BlockStream for BlockStreamService<TempoNodeAdapter> {
     type SubscribeStream = ReceiverStream<Result<proto::RpcBlock, Status>>;
-    type BackfillStream = ReceiverStream<Result<proto::RpcBlock, Status>>;
+    type BackfillStream = ReceiverStream<Result<proto::RpcBlocks, Status>>;
 
     async fn subscribe(
         &self,
@@ -270,11 +270,13 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
             };
             let count = blocks.len();
             let t = Instant::now();
-            for block in blocks {
-                if tx.send(Ok(block)).await.is_err() {
-                    info!(target: "tempo_grpc", "Client disconnected during streaming");
-                    return;
-                }
+            if tx
+                .send(Ok(proto::RpcBlocks { items: blocks }))
+                .await
+                .is_err()
+            {
+                info!(target: "tempo_grpc", "Client disconnected during streaming");
+                return;
             }
             info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count, "Backfill complete");
         });
