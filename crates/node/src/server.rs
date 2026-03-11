@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, sync::Arc};
+use std::{ops::RangeInclusive, sync::Arc, time::Instant};
 
 use eyre::{Context, eyre};
 use reth::{
@@ -8,7 +8,7 @@ use reth::{
 };
 use reth_ethereum::provider::db::DatabaseEnv;
 use reth_exex::{BackfillJobFactory, ExExNotification};
-use reth_tracing::tracing::{info, info_span, instrument};
+use reth_tracing::tracing::info;
 use shared::{
     codec::block::chain_to_rpc_blocks,
     proto::{
@@ -150,32 +150,31 @@ impl Inner<TempoNodeAdapter> {
         }
     }
 
-    #[instrument(target = "tempo_grpc", skip(self))]
     fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::RpcBlock>> {
-        let blocks = {
-            let _span = info_span!(target: "tempo_grpc", "fetch_blocks").entered();
-            self.provider
-                .block_with_senders_range(range.clone().into())?
-        };
-        let block_receipts = {
-            let _span = info_span!(target: "tempo_grpc", "fetch_receipts").entered();
-            self.provider.receipts_by_block_range(range.into())?
-        };
-        let rpc_blocks = {
-            let _span =
-                info_span!(target: "tempo_grpc", "encode_blocks", count = blocks.len()).entered();
-            blocks
-                .iter()
-                .zip(block_receipts)
-                .map(|(block, receipts)| {
-                    proto::RpcBlock::try_from_blocks_and_receipts(
-                        block,
-                        &receipts,
-                        proto::BlockStatus::Committed,
-                    )
-                })
-                .collect::<eyre::Result<Vec<_>>>()?
-        };
+        let t = Instant::now();
+        let blocks = self
+            .provider
+            .block_with_senders_range(range.clone().into())?;
+        info!(target: "tempo_grpc", elapsed = ?t.elapsed(), "fetch_blocks");
+
+        let t = Instant::now();
+        let block_receipts = self.provider.receipts_by_block_range(range.into())?;
+        info!(target: "tempo_grpc", elapsed = ?t.elapsed(), "fetch_receipts");
+
+        let t = Instant::now();
+        let rpc_blocks = blocks
+            .iter()
+            .zip(block_receipts)
+            .map(|(block, receipts)| {
+                proto::RpcBlock::try_from_blocks_and_receipts(
+                    block,
+                    &receipts,
+                    proto::BlockStatus::Committed,
+                )
+            })
+            .collect::<eyre::Result<Vec<_>>>()?;
+        info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count = rpc_blocks.len(), "encode_blocks");
+
         Ok(rpc_blocks)
     }
 }
@@ -270,14 +269,14 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                 }
             };
             let count = blocks.len();
-            let _ = info_span!(target: "tempo_grpc", "stream_blocks", count).entered();
+            let t = Instant::now();
             for block in blocks {
                 if tx.send(Ok(block)).await.is_err() {
                     info!(target: "tempo_grpc", "Client disconnected during streaming");
                     return;
                 }
             }
-            info!(target: "tempo_grpc", count, "Backfill complete");
+            info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count, "Backfill complete");
         });
         Ok(Response::new(ReceiverStream::new(rx)))
     }
