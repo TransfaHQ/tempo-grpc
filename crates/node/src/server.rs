@@ -162,7 +162,8 @@ impl Inner<TempoNodeAdapter> {
             self.provider.receipts_by_block_range(range.into())?
         };
         let rpc_blocks = {
-            let _span = info_span!(target: "tempo_grpc", "encode_blocks", count = blocks.len()).entered();
+            let _span =
+                info_span!(target: "tempo_grpc", "encode_blocks", count = blocks.len()).entered();
             blocks
                 .iter()
                 .zip(block_receipts)
@@ -269,7 +270,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                 }
             };
             let count = blocks.len();
-            let _span = info_span!(target: "tempo_grpc", "stream_blocks", count).entered();
+            let _ = info_span!(target: "tempo_grpc", "stream_blocks", count).entered();
             for block in blocks {
                 if tx.send(Ok(block)).await.is_err() {
                     info!(target: "tempo_grpc", "Client disconnected during streaming");
