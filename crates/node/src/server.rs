@@ -1,11 +1,5 @@
 use std::{ops::RangeInclusive, sync::Arc};
 
-use crate::{
-    codec::block::chain_to_rpc_blocks,
-    server::proto::{
-        SubscribeRequest, block_stream_server::BlockStream, remote_ex_ex_server::RemoteExEx,
-    },
-};
 use eyre::{Context, eyre};
 use reth::{
     api::FullNodeComponents,
@@ -14,6 +8,12 @@ use reth::{
 };
 use reth_ethereum::provider::db::DatabaseEnv;
 use reth_exex::{BackfillJobFactory, ExExNotification};
+use shared::{
+    codec::block::chain_to_rpc_blocks,
+    proto::{
+        self, SubscribeRequest, block_stream_server::BlockStream, remote_ex_ex_server::RemoteExEx,
+    },
+};
 use tempo_evm::TempoEvmConfig;
 use tempo_node::node::TempoNode;
 use tempo_primitives::TempoPrimitives;
@@ -23,12 +23,6 @@ use tokio::sync::{
 };
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tonic::{Request, Response, Status};
-
-pub mod proto {
-    tonic::include_proto!("exex");
-    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
-        tonic::include_file_descriptor_set!("exex_descriptor");
-}
 
 type TempoNodeAdapter = NodeAdapter<RethFullAdapter<Arc<DatabaseEnv>, TempoNode>>;
 

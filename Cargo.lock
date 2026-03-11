@@ -4617,6 +4617,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "964de6e86d545b246d84badc0fef527924ace5134f30641c203ef52ba83f58d5"
 
 [[package]]
+name = "indexer"
+version = "0.1.0"
+dependencies = [
+ "shared",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tracing",
+ "tracing-subscriber 0.3.22",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10641,6 +10653,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "eyre",
+ "prost",
+ "reth",
+ "reth-ethereum",
+ "reth-exex",
+ "tempo-primitives",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "shellexpand"
 version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11146,22 +11176,18 @@ dependencies = [
 name = "tempo-grpc"
 version = "0.1.0"
 dependencies = [
- "alloy-consensus",
- "alloy-eips",
- "alloy-primitives",
  "clap",
  "eyre",
  "futures-util",
- "prost",
  "reth",
  "reth-cli-util",
  "reth-ethereum",
  "reth-ethereum-cli",
  "reth-exex",
- "reth-node-ethereum",
  "reth-rpc-server-types",
  "reth-tracing",
  "rustls",
+ "shared",
  "tempo-chainspec",
  "tempo-consensus",
  "tempo-evm",
@@ -11171,8 +11197,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tonic-prost",
- "tonic-prost-build",
  "tonic-reflection",
 ]
 
@@ -11766,11 +11790,13 @@ dependencies = [
  "socket2 0.6.2",
  "sync_wrapper",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tower",
  "tower-layer",
  "tower-service",
  "tracing",
+ "webpki-roots 1.0.6",
 ]
 
 [[package]]

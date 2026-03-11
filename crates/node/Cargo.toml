@@ -1,0 +1,54 @@
+[package]
+name = "tempo-grpc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Logging
+tempo-node = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-chainspec = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-consensus = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-evm = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-eyre = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+
+clap = { version = "4.5.57", features = ["derive", "env"] }
+eyre = "0.6" # Easy error handling
+futures-util = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio = "1.50.0"
+tokio-stream = "0.1"
+tonic = "0.14.5"
+tonic-reflection = "0.14.5"
+
+shared = { path = "../shared" }
+
+
+[features]
+default = ["asm-keccak", "jemalloc", "otlp"]
+
+asm-keccak = [
+	"tempo-node/asm-keccak",
+	"reth-ethereum-cli/asm-keccak",
+]
+
+jemalloc = [
+	"reth-cli-util/jemalloc",
+	"reth-ethereum-cli/jemalloc",
+	"reth-ethereum/jemalloc",
+	"tempo-node/jemalloc",
+]
+
+otlp = [
+	"reth-ethereum-cli/otlp",
+	"reth-ethereum-cli/otlp-logs",
+	"reth-ethereum/otlp",
+	"tempo-node/otlp",
+]
+

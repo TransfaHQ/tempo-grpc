@@ -1,4 +1,4 @@
-use crate::server::proto;
+use crate::proto;
 use alloy_consensus::Signed;
 use alloy_primitives::{Address, B64, B256, BlockHash, Bloom, Bytes, TxHash, U256};
 use eyre::{OptionExt, eyre};
@@ -166,9 +166,7 @@ impl From<&tempo_primitives::TempoHeader> for proto::Header {
             base_fee_per_gas: inner.base_fee_per_gas,
             blob_gas_used: inner.blob_gas_used,
             excess_blob_gas: inner.excess_blob_gas,
-            parent_beacon_block_root: inner
-                .parent_beacon_block_root
-                .map(|root| root.to_vec()),
+            parent_beacon_block_root: inner.parent_beacon_block_root.map(|root| root.to_vec()),
             extra_data: inner.extra_data.to_vec(),
             general_gas_limit: header.general_gas_limit,
             shared_gas_limit: header.shared_gas_limit,
@@ -185,7 +183,9 @@ fn eth_tx_to_proto(
     proto::Transaction {
         transaction: Some(transaction),
         hash: hash.to_vec(),
-        signature: Some(proto::transaction::Signature::EthSignature(signature.into())),
+        signature: Some(proto::transaction::Signature::EthSignature(
+            signature.into(),
+        )),
     }
 }
 
@@ -2049,13 +2049,11 @@ mod tests {
     #[test]
     fn test_bytecode_eip7702_roundtrip() {
         let original = proto::Bytecode {
-            bytecode: Some(proto::bytecode::Bytecode::Eip7702(
-                proto::Eip7702Bytecode {
-                    delegated_address: dummy_bytes(ADDR_SIZE, 1),
-                    version: 0,
-                    raw: vec![0xef, 0x01, 0x00],
-                },
-            )),
+            bytecode: Some(proto::bytecode::Bytecode::Eip7702(proto::Eip7702Bytecode {
+                delegated_address: dummy_bytes(ADDR_SIZE, 1),
+                version: 0,
+                raw: vec![0xef, 0x01, 0x00],
+            })),
         };
         let domain: reth::revm::state::Bytecode = (&original).try_into().unwrap();
         let roundtrip: proto::Bytecode = (&domain).try_into().unwrap();

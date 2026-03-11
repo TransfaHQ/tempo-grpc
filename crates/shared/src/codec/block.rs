@@ -4,7 +4,7 @@ use reth::{primitives::RecoveredBlock, providers::Chain};
 use reth_ethereum::primitives::InMemorySize;
 use tempo_primitives::{Block as TempoBlock, TempoPrimitives, TempoReceipt};
 
-use crate::server::proto;
+use crate::proto;
 
 pub fn chain_to_rpc_blocks(
     chain: &Chain<TempoPrimitives>,

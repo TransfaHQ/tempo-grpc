@@ -19,16 +19,15 @@ use tempo_consensus::TempoConsensus;
 use tempo_evm::TempoEvmConfig;
 use tempo_node::{TempoNodeArgs, node::TempoNode};
 
-mod codec;
 mod defaults;
 mod exex;
 mod server;
 use exex::ExEx;
 use tokio::sync::broadcast;
 
-use crate::server::{
-    BlockStreamService, RemoteExExService,
-    proto::{self, block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer},
+use crate::server::{BlockStreamService, RemoteExExService};
+use shared::proto::{
+    self, block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer,
 };
 
 #[derive(Debug, Clone, clap::Args)]

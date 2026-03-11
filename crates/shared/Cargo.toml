@@ -1,0 +1,21 @@
+[package]
+name = "shared"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy-eips = { version = "1.6.1", default-features = false }
+alloy-consensus = { version = "1.6.1", default-features = false }
+alloy-primitives = { version = "1.5.4", default-features = false }
+reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
+tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+
+eyre = "0.6" # Easy error handling
+prost = "0.14.3"
+tonic = "0.14.5"
+tonic-prost = "*"
+
+[build-dependencies]
+tonic-prost-build = "*"
