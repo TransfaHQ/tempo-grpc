@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::RangeInclusive, sync::Arc};
 
 use crate::{
     codec::block::chain_to_rpc_blocks,
@@ -154,6 +154,24 @@ impl Inner<TempoNodeAdapter> {
             Err(eyre!("Block not found: {}", block_number))
         }
     }
+
+    fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::RpcBlock>> {
+        let blocks = self
+            .provider
+            .block_with_senders_range(range.clone().into())?;
+        let block_receipts = self.provider.receipts_by_block_range(range.into())?;
+        blocks
+            .iter()
+            .zip(block_receipts)
+            .map(|(block, receipts)| {
+                proto::RpcBlock::try_from_blocks_and_receipts(
+                    block,
+                    &receipts,
+                    proto::BlockStatus::Committed,
+                )
+            })
+            .collect()
+    }
 }
 
 #[tonic::async_trait]
@@ -230,13 +248,22 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
         let (tx, rx) = mpsc::channel(32);
         let inner = Arc::clone(&self.inner);
         tokio::spawn(async move {
-            for block_number in message.from..=message.to {
-                let inner = Arc::clone(&inner);
-                let block = tokio::task::spawn_blocking(move || inner.fetch_block(block_number))
-                    .await
-                    .map_err(|e| Status::internal(e.to_string()))
-                    .and_then(|r| r.map_err(|e| Status::internal(e.to_string())));
-                if tx.send(block).await.is_err() {
+            let inner = Arc::clone(&inner);
+            let blocks = tokio::task::spawn_blocking(move || {
+                inner.fetch_block_range(message.from..=message.to)
+            })
+            .await
+            .map_err(|e| Status::internal(e.to_string()))
+            .and_then(|r| r.map_err(|e| Status::internal(e.to_string())));
+            let blocks = match blocks {
+                Ok(b) => b,
+                Err(e) => {
+                    let _ = tx.send(Err(e)).await;
+                    return;
+                }
+            };
+            for block in blocks {
+                if tx.send(Ok(block)).await.is_err() {
                     return;
                 }
             }
