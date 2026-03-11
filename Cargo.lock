@@ -11198,6 +11198,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
+ "tracing",
 ]
 
 [[package]]

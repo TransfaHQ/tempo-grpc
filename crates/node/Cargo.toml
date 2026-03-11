@@ -28,6 +28,7 @@ tonic = "0.14.5"
 tonic-reflection = "0.14.5"
 
 shared = { path = "../shared" }
+tracing = "0.1.44"
 
 
 [features]

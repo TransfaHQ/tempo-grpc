@@ -3,7 +3,6 @@ use std::time::Instant;
 use shared::proto::{BackfillRequest, block_stream_client::BlockStreamClient};
 use tokio_stream::StreamExt;
 use tonic::Request;
-use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

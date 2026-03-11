@@ -8,6 +8,7 @@ use reth::{
 };
 use reth_ethereum::provider::db::DatabaseEnv;
 use reth_exex::{BackfillJobFactory, ExExNotification};
+use reth_tracing::tracing::{info, info_span, instrument};
 use shared::{
     codec::block::chain_to_rpc_blocks,
     proto::{
@@ -149,22 +150,32 @@ impl Inner<TempoNodeAdapter> {
         }
     }
 
+    #[instrument(target = "tempo_grpc", skip(self))]
     fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::RpcBlock>> {
-        let blocks = self
-            .provider
-            .block_with_senders_range(range.clone().into())?;
-        let block_receipts = self.provider.receipts_by_block_range(range.into())?;
-        blocks
-            .iter()
-            .zip(block_receipts)
-            .map(|(block, receipts)| {
-                proto::RpcBlock::try_from_blocks_and_receipts(
-                    block,
-                    &receipts,
-                    proto::BlockStatus::Committed,
-                )
-            })
-            .collect()
+        let blocks = {
+            let _span = info_span!(target: "tempo_grpc", "fetch_blocks").entered();
+            self.provider
+                .block_with_senders_range(range.clone().into())?
+        };
+        let block_receipts = {
+            let _span = info_span!(target: "tempo_grpc", "fetch_receipts").entered();
+            self.provider.receipts_by_block_range(range.into())?
+        };
+        let rpc_blocks = {
+            let _span = info_span!(target: "tempo_grpc", "encode_blocks", count = blocks.len()).entered();
+            blocks
+                .iter()
+                .zip(block_receipts)
+                .map(|(block, receipts)| {
+                    proto::RpcBlock::try_from_blocks_and_receipts(
+                        block,
+                        &receipts,
+                        proto::BlockStatus::Committed,
+                    )
+                })
+                .collect::<eyre::Result<Vec<_>>>()?
+        };
+        Ok(rpc_blocks)
     }
 }
 
@@ -239,6 +250,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                 "invalid range: from must be <= to",
             ));
         }
+        info!(target: "tempo_grpc", from = message.from, to = message.to, "Backfill requested");
         let (tx, rx) = mpsc::channel(32);
         let inner = Arc::clone(&self.inner);
         tokio::spawn(async move {
@@ -256,11 +268,15 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                     return;
                 }
             };
+            let count = blocks.len();
+            let _span = info_span!(target: "tempo_grpc", "stream_blocks", count).entered();
             for block in blocks {
                 if tx.send(Ok(block)).await.is_err() {
+                    info!(target: "tempo_grpc", "Client disconnected during streaming");
                     return;
                 }
             }
+            info!(target: "tempo_grpc", count, "Backfill complete");
         });
         Ok(Response::new(ReceiverStream::new(rx)))
     }
