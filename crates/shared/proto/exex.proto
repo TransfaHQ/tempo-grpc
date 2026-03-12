@@ -20,6 +20,7 @@ message SubscribeRequest {}
 message BackfillRequest {
   uint64 from = 1;
   uint64 to = 2;
+  uint64 size = 3;
 }
 
 message ExExNotification {

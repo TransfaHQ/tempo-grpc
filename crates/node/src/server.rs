@@ -1,6 +1,7 @@
 use std::{ops::RangeInclusive, sync::Arc, time::Instant};
 
 use eyre::{Context, eyre};
+use futures_util::{StreamExt as _, stream};
 use reth::{
     api::FullNodeComponents,
     builder::{NodeAdapter, RethFullAdapter},
@@ -22,7 +23,7 @@ use tokio::sync::{
     broadcast::{self, error::RecvError},
     mpsc,
 };
-use tokio_stream::{StreamExt, wrappers::ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 type TempoNodeAdapter = NodeAdapter<RethFullAdapter<Arc<DatabaseEnv>, TempoNode>>;
@@ -251,34 +252,45 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
             ));
         }
         info!(target: "tempo_grpc", from = message.from, to = message.to, "Backfill requested");
-        let (tx, rx) = mpsc::channel(32);
+        let (tx, rx) = mpsc::channel(128);
         let inner = Arc::clone(&self.inner);
         tokio::spawn(async move {
-            let inner = Arc::clone(&inner);
-            let blocks = tokio::task::spawn_blocking(move || {
-                inner.fetch_block_range(message.from..=message.to)
-            })
-            .await
-            .map_err(|e| Status::internal(e.to_string()))
-            .and_then(|r| r.map_err(|e| Status::internal(e.to_string())));
-            let blocks = match blocks {
-                Ok(b) => b,
-                Err(e) => {
-                    let _ = tx.send(Err(e)).await;
+            let chunks: Vec<_> = (message.from..=message.to)
+                .step_by(message.size as usize)
+                .map(|start| (start, (start + message.size - 1).min(message.to)))
+                .collect();
+
+            let mut stream = stream::iter(chunks)
+                .map(|(start, end)| {
+                    let inner = Arc::clone(&inner);
+                    tokio::task::spawn_blocking(move || inner.fetch_block_range(start..=end))
+                })
+                .buffered(4);
+
+            while let Some(result) = stream.next().await {
+                let result = result
+                    .map_err(|e| Status::internal(e.to_string()))
+                    .and_then(|r| r.map_err(|e| Status::internal(e.to_string())));
+
+                let blocks = match result {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                        return;
+                    }
+                };
+                let count = blocks.len();
+                let t = Instant::now();
+                if tx
+                    .send(Ok(proto::RpcBlocks { items: blocks }))
+                    .await
+                    .is_err()
+                {
+                    info!(target: "tempo_grpc", "Client disconnected during streaming");
                     return;
                 }
-            };
-            let count = blocks.len();
-            let t = Instant::now();
-            if tx
-                .send(Ok(proto::RpcBlocks { items: blocks }))
-                .await
-                .is_err()
-            {
-                info!(target: "tempo_grpc", "Client disconnected during streaming");
-                return;
+                info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count, "streamed chunk");
             }
-            info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count, "Backfill complete");
         });
         Ok(Response::new(ReceiverStream::new(rx)))
     }
