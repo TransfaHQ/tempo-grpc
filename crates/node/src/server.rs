@@ -255,6 +255,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
         let (tx, rx) = mpsc::channel(128);
         let inner = Arc::clone(&self.inner);
         tokio::spawn(async move {
+            let e = Instant::now();
             let chunks: Vec<_> = (message.from..=message.to)
                 .step_by(message.size as usize)
                 .map(|start| (start, (start + message.size - 1).min(message.to)))
@@ -265,7 +266,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                     let inner = Arc::clone(&inner);
                     tokio::task::spawn_blocking(move || inner.fetch_block_range(start..=end))
                 })
-                .buffered(4);
+                .buffered(16);
 
             while let Some(result) = stream.next().await {
                 let result = result
@@ -291,6 +292,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                 }
                 info!(target: "tempo_grpc", elapsed = ?t.elapsed(), count, "streamed chunk");
             }
+            info!(target: "tempo_grpc", elapsed = ?e.elapsed(), "Backfill completed");
         });
         Ok(Response::new(ReceiverStream::new(rx)))
     }
