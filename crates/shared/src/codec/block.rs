@@ -163,149 +163,21 @@ fn compute_gas_used(receipts: &[TempoReceipt]) -> Vec<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use alloy_consensus::{Header, Signed, TxEip1559, TxLegacy};
-    use alloy_eips::eip4895::Withdrawal;
-    use alloy_primitives::{Address, B64, B256, Bloom, Bytes, LogData, Signature, U256};
-    use reth::primitives::{BlockBody, SealedBlock, SealedHeader};
-    use reth::providers::{Chain, ExecutionOutcome};
     use std::collections::BTreeMap;
-    use tempo_primitives::{Block, TempoHeader, TempoTxEnvelope, TempoTxType};
 
-    fn make_header(number: u64, gas_used: u64, base_fee: Option<u64>) -> TempoHeader {
-        TempoHeader {
-            inner: Header {
-                parent_hash: B256::with_last_byte(1),
-                ommers_hash: B256::with_last_byte(2),
-                beneficiary: Address::with_last_byte(3),
-                state_root: B256::with_last_byte(4),
-                transactions_root: B256::with_last_byte(5),
-                receipts_root: B256::with_last_byte(6),
-                withdrawals_root: None,
-                logs_bloom: Bloom::ZERO,
-                difficulty: U256::from(1000),
-                number,
-                gas_limit: 30_000_000,
-                gas_used,
-                timestamp: 1_700_000_000,
-                mix_hash: B256::with_last_byte(9),
-                nonce: B64::ZERO,
-                base_fee_per_gas: base_fee,
-                blob_gas_used: None,
-                excess_blob_gas: None,
-                parent_beacon_block_root: None,
-                extra_data: Bytes::from_static(&[0xca, 0xfe]),
-                requests_hash: None,
-            },
-            general_gas_limit: 15_000_000,
-            shared_gas_limit: 15_000_000,
-            timestamp_millis_part: 500,
-        }
-    }
+    use alloy_consensus::{Block, BlockBody};
+    use alloy_eips::eip4895::Withdrawal;
+    use alloy_primitives::{Address, B256, B64, U256};
+    use reth::{
+        primitives::{SealedBlock, SealedHeader},
+        providers::ExecutionOutcome,
+    };
+    use tempo_primitives::TempoTxType;
 
-    fn make_legacy_tx(nonce: u64, gas_price: u128, to: TxKind) -> TempoTxEnvelope {
-        let tx = TxLegacy {
-            chain_id: Some(1),
-            nonce,
-            gas_price,
-            gas_limit: 21_000,
-            to,
-            value: U256::from(1000),
-            input: Bytes::new(),
-        };
-        let sig = Signature::new(U256::from(1), U256::from(2), false);
-        let hash = B256::random();
-        Signed::new_unchecked(tx, sig, hash).into()
-    }
-
-    fn make_eip1559_tx(
-        nonce: u64,
-        max_fee_per_gas: u128,
-        max_priority_fee_per_gas: u128,
-        to: TxKind,
-    ) -> TempoTxEnvelope {
-        let tx = TxEip1559 {
-            chain_id: 1,
-            nonce,
-            gas_limit: 21_000,
-            max_fee_per_gas,
-            max_priority_fee_per_gas,
-            to,
-            value: U256::from(1000),
-            access_list: Default::default(),
-            input: Bytes::new(),
-        };
-        let sig = Signature::new(U256::from(3), U256::from(4), false);
-        let hash = B256::random();
-        Signed::new_unchecked(tx, sig, hash).into()
-    }
-
-    fn make_receipt(
-        tx_type: TempoTxType,
-        success: bool,
-        cumulative_gas_used: u64,
-        logs: Vec<alloy_primitives::Log>,
-    ) -> TempoReceipt {
-        TempoReceipt {
-            tx_type,
-            success,
-            cumulative_gas_used,
-            logs,
-        }
-    }
-
-    fn make_log(address: Address) -> alloy_primitives::Log {
-        alloy_primitives::Log {
-            address,
-            data: LogData::new_unchecked(
-                vec![B256::with_last_byte(0xaa)],
-                Bytes::from_static(&[0x01, 0x02]),
-            ),
-        }
-    }
-
-    fn make_chain(
-        blocks: Vec<(
-            TempoHeader,
-            B256,                            // block hash
-            Vec<(TempoTxEnvelope, Address)>, // (tx, sender)
-            Vec<TempoReceipt>,
-        )>,
-    ) -> Chain<TempoPrimitives> {
-        let first_block = blocks
-            .first()
-            .map(|(h, _, _, _)| h.inner.number)
-            .unwrap_or(0);
-        let mut recovered_blocks = Vec::new();
-        let mut all_receipts = Vec::new();
-
-        for (header, hash, txs_with_senders, receipts) in blocks {
-            let (transactions, senders): (Vec<_>, Vec<_>) = txs_with_senders.into_iter().unzip();
-            let sealed_header = SealedHeader::new(header, hash);
-            let body = BlockBody {
-                transactions,
-                ommers: vec![],
-                withdrawals: None,
-            };
-            let block =
-                SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(senders);
-            recovered_blocks.push(block);
-            all_receipts.push(receipts);
-        }
-
-        Chain::<TempoPrimitives>::new(
-            recovered_blocks,
-            ExecutionOutcome {
-                bundle: Default::default(),
-                receipts: all_receipts,
-                first_block,
-                requests: Default::default(),
-            },
-            BTreeMap::new(),
-            BTreeMap::new(),
-        )
-    }
-
+    use super::*;
+    use crate::test_utils::{
+        make_chain, make_eip1559_tx, make_header, make_legacy_tx, make_log, make_receipt,
+    };
     // ==================== compute_gas_used tests ====================
 
     #[test]
@@ -750,8 +622,8 @@ mod tests {
                 .into(),
             ),
         };
-        let block =
-            SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(vec![]);
+        let block = SealedBlock::<tempo_primitives::Block>::from_sealed_parts(sealed_header, body)
+            .with_senders(vec![]);
 
         let chain = Chain::<TempoPrimitives>::new(
             vec![block],
@@ -795,8 +667,8 @@ mod tests {
             ommers: vec![ommer_header],
             withdrawals: None,
         };
-        let block =
-            SealedBlock::<Block>::from_sealed_parts(sealed_header, body).with_senders(vec![]);
+        let block = SealedBlock::<tempo_primitives::Block>::from_sealed_parts(sealed_header, body)
+            .with_senders(vec![]);
 
         let chain = Chain::<TempoPrimitives>::new(
             vec![block],

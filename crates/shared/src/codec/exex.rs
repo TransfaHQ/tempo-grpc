@@ -1,15 +1,16 @@
 use crate::proto;
 use alloy_consensus::Signed;
-use alloy_primitives::{Address, B64, B256, BlockHash, Bloom, Bytes, TxHash, U256};
-use eyre::{OptionExt, eyre};
+use alloy_primitives::{Address, BlockHash, Bloom, Bytes, TxHash, B256, B64, U256};
+use eyre::{eyre, OptionExt};
+use reth::primitives::RecoveredBlock;
 use std::{collections::BTreeMap, sync::Arc};
 use tempo_primitives::{
-    AASigned, Block, TempoPrimitives, TempoSignature, TempoTxEnvelope,
     transaction::{
+        tt_signature::{P256SignatureWithPreHash, WebAuthnSignature},
         Call, KeyAuthorization, KeychainSignature, KeychainVersion, PrimitiveSignature,
         TempoSignedAuthorization, TokenLimit,
-        tt_signature::{P256SignatureWithPreHash, WebAuthnSignature},
     },
+    AASigned, Block, TempoPrimitives, TempoSignature, TempoTxEnvelope,
 };
 
 impl TryFrom<&reth_exex::ExExNotification<TempoPrimitives>> for proto::ExExNotification {
@@ -51,39 +52,7 @@ impl TryFrom<&reth::providers::Chain<TempoPrimitives>> for proto::Chain {
         Ok(proto::Chain {
             blocks: chain
                 .blocks_iter()
-                .map(|block| {
-                    Ok(proto::Block {
-                        header: Some(proto::SealedHeader {
-                            hash: block.hash().to_vec(),
-                            header: Some(block.header().into()),
-                        }),
-                        body: block
-                            .body()
-                            .transactions
-                            .iter()
-                            .map(TryInto::try_into)
-                            .collect::<eyre::Result<_>>()?,
-                        ommers: block.body().ommers.iter().map(Into::into).collect(),
-                        senders: block
-                            .senders()
-                            .iter()
-                            .map(|sender| sender.to_vec())
-                            .collect(),
-                        withdrawals: block.body().withdrawals.as_ref().map(|withdrawals| {
-                            proto::Withdrawals {
-                                items: withdrawals
-                                    .iter()
-                                    .map(|withdrawal| proto::Withdrawal {
-                                        index: withdrawal.index,
-                                        validator_index: withdrawal.validator_index,
-                                        address: withdrawal.address.to_vec(),
-                                        amount: withdrawal.amount,
-                                    })
-                                    .collect(),
-                            }
-                        }),
-                    })
-                })
+                .map(TryInto::try_into)
                 .collect::<eyre::Result<_>>()?,
             execution_outcome: Some(proto::ExecutionOutcome {
                 bundle: Some(proto::BundleState {
@@ -140,6 +109,46 @@ impl TryFrom<&reth::providers::Chain<TempoPrimitives>> for proto::Chain {
                     })
                     .collect(),
             }),
+        })
+    }
+}
+
+impl TryFrom<&RecoveredBlock<Block>> for proto::Block {
+    type Error = eyre::Error;
+
+    fn try_from(block: &RecoveredBlock<Block>) -> eyre::Result<proto::Block> {
+        Ok(proto::Block {
+            header: Some(proto::SealedHeader {
+                hash: block.hash().to_vec(),
+                header: Some(block.header().into()),
+            }),
+            body: block
+                .body()
+                .transactions
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<eyre::Result<_>>()?,
+            ommers: block.body().ommers.iter().map(Into::into).collect(),
+            senders: block
+                .senders()
+                .iter()
+                .map(|sender| sender.to_vec())
+                .collect(),
+            withdrawals: block
+                .body()
+                .withdrawals
+                .as_ref()
+                .map(|withdrawals| proto::Withdrawals {
+                    items: withdrawals
+                        .iter()
+                        .map(|withdrawal| proto::Withdrawal {
+                            index: withdrawal.index,
+                            validator_index: withdrawal.validator_index,
+                            address: withdrawal.address.to_vec(),
+                            amount: withdrawal.amount,
+                        })
+                        .collect(),
+                }),
         })
     }
 }
@@ -839,7 +848,7 @@ impl TryFrom<&proto::Header> for tempo_primitives::TempoHeader {
                     .map(|root| B256::try_from(root.as_slice()))
                     .transpose()?,
                 requests_hash: None,
-                extra_data: header.extra_data.as_slice().to_vec().into(),
+                extra_data: header.extra_data.clone().into(),
             },
             general_gas_limit: header.general_gas_limit,
             shared_gas_limit: header.shared_gas_limit,
