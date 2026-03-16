@@ -83,9 +83,7 @@ async fn main() -> eyre::Result<()> {
         .with_url(args.ch_url)
         .with_password(args.ch_password)
         .with_user(args.ch_user)
-        .with_database(args.ch_database)
-        .with_option("async_insert", "1")
-        .with_option("wait_for_async_insert", "1");
+        .with_database(args.ch_database);
     let client = Arc::new(client);
 
     for _ in 0..args.concurrency {
