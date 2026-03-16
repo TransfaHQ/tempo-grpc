@@ -125,10 +125,6 @@ fn main() -> eyre::Result<()> {
             )
             .add_service(BlockStreamServer::new(BlockStreamService::new(
                 notifications_tx.clone(),
-                BackfillJobFactory::new(
-                    handle.node.evm_config().clone(),
-                    handle.node.provider().clone(),
-                ),
                 handle.node.provider().clone(),
             )))
             .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));

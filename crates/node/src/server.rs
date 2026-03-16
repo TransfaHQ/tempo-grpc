@@ -112,13 +112,11 @@ pub struct BlockStreamService<N: FullNodeComponents> {
 impl<N: FullNodeComponents> BlockStreamService<N> {
     pub fn new(
         exex_notifications: Arc<broadcast::Sender<ExExNotification<TempoPrimitives>>>,
-        backfill_job_factory: BackfillJobFactory<TempoEvmConfig, N::Provider>,
         provider: N::Provider,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 exex_notifications,
-                backfill_job_factory,
                 provider,
             }),
         }
@@ -128,29 +126,10 @@ impl<N: FullNodeComponents> BlockStreamService<N> {
 #[derive(Debug)]
 struct Inner<Node: FullNodeComponents> {
     pub exex_notifications: Arc<broadcast::Sender<ExExNotification<TempoPrimitives>>>,
-    pub backfill_job_factory: BackfillJobFactory<TempoEvmConfig, Node::Provider>,
     pub provider: Node::Provider,
 }
 
 impl Inner<TempoNodeAdapter> {
-    fn fetch_block(&self, block_number: u64) -> eyre::Result<proto::RpcBlock> {
-        let block = self
-            .provider
-            .recovered_block(block_number.into(), TransactionVariant::WithHash)?;
-        let receipts = self.provider.receipts_by_block(block_number.into())?;
-        if let Some(block) = block
-            && let Some(receipts) = receipts
-        {
-            proto::RpcBlock::try_from_blocks_and_receipts(
-                &block,
-                &receipts,
-                proto::BlockStatus::Committed,
-            )
-        } else {
-            Err(eyre!("Block not found: {}", block_number))
-        }
-    }
-
     fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::RpcBlock>> {
         let t = Instant::now();
         let blocks = self
