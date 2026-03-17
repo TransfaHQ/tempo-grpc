@@ -17,7 +17,8 @@ pub struct LogRow {
     pub transaction_hash: Hash,
     pub address: Address,
     pub topics: Vec<Hash>,
-    pub data: String,
+    #[serde(with = "serde_bytes")]
+    pub data: Vec<u8>,
 }
 
 pub fn log_to_row(
@@ -43,6 +44,6 @@ pub fn log_to_row(
             .iter()
             .map(|topic| Ok(FixedBytes::try_from(topic.as_slice())?.into()))
             .collect::<Result<Vec<_>, ParseError>>()?,
-        data: Bytes::from(data.data.clone()).to_string(),
+        data: data.data.clone(),
     })
 }
