@@ -4,7 +4,7 @@ use clap::Parser;
 use clickhouse::Client;
 use eyre::eyre;
 use shared::proto::{BackfillRequest, block_stream_client::BlockStreamClient};
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::Request;
@@ -12,13 +12,16 @@ use tracing::{debug, error, info};
 
 use crate::{
     error::IndexerError,
-    models::{BlockRow, TransactionRow, transaction::txn_to_row},
-    writer::process_block,
+    models::{
+        BlockRow, TransactionRow,
+        error::ParseError,
+        log::{LogRow, log_to_row},
+        transaction::txn_to_row,
+    },
 };
 
 mod error;
 mod models;
-mod writer;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -104,6 +107,7 @@ async fn main() -> eyre::Result<()> {
                         info!("Processing batch");
                         let mut block_inserter = client.inserter::<BlockRow>("blocks");
                         let mut tx_inserter = client.inserter::<TransactionRow>("txs");
+                        let mut log_inserter = client.inserter::<LogRow>("logs");
                         for block in blocks {
                             let row = (&block).try_into()?;
                             block_inserter.write(&row).await?;
@@ -115,8 +119,32 @@ async fn main() -> eyre::Result<()> {
                             for row in tx_rows {
                                 tx_inserter.write(&row).await?;
                             }
+                            let mut log_index = 0;
+                            let mut logs = Vec::new();
+                            for tx in &block.transactions {
+                                let receipt = tx
+                                    .receipt
+                                    .as_ref()
+                                    .ok_or(ParseError::MissingField("transaction"))?;
+                                let inner = tx
+                                    .transaction
+                                    .as_ref()
+                                    .ok_or(ParseError::MissingField("transaction.transaction"))?;
+                                for log in &receipt.logs {
+                                    logs.push((tx.index, &inner.hash, log));
+                                }
+                            }
+                            for (tx_index, tx_hash, log) in logs {
+                                let row = log_to_row(&log, log_index, &block, tx_index, tx_hash)?;
+                                log_inserter.write(&row).await?;
+                                log_index += 1;
+                            }
                         }
-                        tokio::try_join!(block_inserter.end(), tx_inserter.end())?;
+                        tokio::try_join!(
+                            block_inserter.end(),
+                            tx_inserter.end(),
+                            log_inserter.end()
+                        )?;
                         info!("Batch processed");
                     }
                     Err(_) => {
