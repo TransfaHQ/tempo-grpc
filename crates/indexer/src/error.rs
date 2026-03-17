@@ -1,14 +1,14 @@
-use std::array::TryFromSliceError;
-
 use async_channel::{RecvError, SendError};
 use shared::proto;
 use thiserror::Error;
 use tonic::Status;
 
+use crate::models::error::ParseError;
+
 #[derive(Debug, Error)]
 pub enum IndexerError {
-    #[error("failed to decode block")]
-    Decode(#[from] TryFromSliceError),
+    #[error(transparent)]
+    Decode(#[from] ParseError),
     #[error("failed to write row to clickhouse")]
     Clickhouse(#[from] clickhouse::error::Error),
     #[error("channel empty or closed")]

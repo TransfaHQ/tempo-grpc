@@ -10,7 +10,11 @@ use tokio_util::sync::CancellationToken;
 use tonic::Request;
 use tracing::{debug, error, info};
 
-use crate::{error::IndexerError, writer::process_block};
+use crate::{
+    error::IndexerError,
+    models::{BlockRow, TransactionRow, transaction::txn_to_row},
+    writer::process_block,
+};
 
 mod error;
 mod models;
@@ -98,11 +102,21 @@ async fn main() -> eyre::Result<()> {
                 match rx.recv().await {
                     Ok(blocks) => {
                         info!("Processing batch");
-                        let mut inserter = client.inserter("blocks");
+                        let mut block_inserter = client.inserter::<BlockRow>("blocks");
+                        let mut tx_inserter = client.inserter::<TransactionRow>("txs");
                         for block in blocks {
-                            process_block(&mut inserter, &block).await?;
+                            let row = (&block).try_into()?;
+                            block_inserter.write(&row).await?;
+                            let tx_rows = block
+                                .transactions
+                                .iter()
+                                .map(|tx| txn_to_row(&block, tx))
+                                .collect::<Result<Vec<_>, _>>()?;
+                            for row in tx_rows {
+                                tx_inserter.write(&row).await?;
+                            }
                         }
-                        inserter.end().await?;
+                        tokio::try_join!(block_inserter.end(), tx_inserter.end())?;
                         info!("Batch processed");
                     }
                     Err(_) => {

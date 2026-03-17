@@ -1,70 +1,92 @@
+use crate::models::error::ParseError;
+
+use super::{Address, Hash};
 use alloy_primitives::{B64, Bloom, Bytes, FixedBytes, U256};
-use clickhouse::{Client, inserter::Inserter};
-use shared::proto::RpcBlock;
-use tracing::info;
+use clickhouse::Row;
+use serde::{Deserialize, Serialize};
+use shared::proto;
 
-use crate::{error::IndexerError, models::BlockRow};
-
-pub struct Writer {
-    // pub clickhouse_client: &Client,
+#[derive(Debug, Clone, Serialize, Deserialize, Row)]
+pub struct BlockRow {
+    pub number: u64,
+    pub hash: Hash,
+    pub timestamp: u64,
+    pub parent_hash: Hash,
+    pub sha3_uncles: Hash,
+    pub miner: Address,
+    pub state_root: Hash,
+    pub transactions_root: Hash,
+    pub receipts_root: Hash,
+    pub logs_bloom: String,
+    pub difficulty: String,
+    pub gas_limit: u64,
+    pub gas_used: u64,
+    pub extra_data: String,
+    pub mix_hash: Hash,
+    pub nonce: u64,
+    pub base_fee_per_gas: Option<u64>,
+    pub withdrawals_root: Option<Hash>,
+    pub blob_gas_used: Option<u64>,
+    pub excess_blob_gas: Option<u64>,
+    pub parent_beacon_block_root: Option<Hash>,
+    pub requests_hash: Option<Hash>,
+    pub size: u64,
+    // Tempo-specific fields
+    pub general_gas_limit: u64,
+    pub shared_gas_limit: u64,
+    pub timestamp_millis_part: u64,
 }
 
-pub fn block_to_row(block: &RpcBlock) -> Result<BlockRow, IndexerError> {
-    Ok(BlockRow {
-        number: block.number,
-        hash: FixedBytes::try_from(block.hash.as_slice())?.into(),
-        timestamp: block.timestamp,
-        parent_hash: FixedBytes::try_from(block.parent_hash.as_slice())?.into(),
-        sha3_uncles: FixedBytes::try_from(block.ommers_hash.as_slice())?.into(),
-        miner: FixedBytes::try_from(block.miner.as_slice())?.into(),
-        state_root: FixedBytes::try_from(block.state_root.as_slice())?.into(),
-        transactions_root: FixedBytes::try_from(block.transactions_root.as_slice())?.into(),
-        receipts_root: FixedBytes::try_from(block.receipts_root.as_slice())?.into(),
-        logs_bloom: Bloom::try_from(block.logs_bloom.as_slice())?.to_string(),
-        difficulty: U256::try_from_le_slice(block.difficulty.as_slice())
-            .unwrap_or_default()
-            .to_string(),
-        gas_limit: block.gas_limit,
-        gas_used: block.gas_used,
-        extra_data: Bytes::from(block.extra_data.clone()).to_string(),
-        mix_hash: FixedBytes::try_from(block.mix_hash.as_slice())?.into(),
-        nonce: B64::try_from(block.nonce.as_slice())?.into(),
-        base_fee_per_gas: block.base_fee_per_gas,
-        withdrawals_root: block
-            .withdrawals_root
-            .as_ref()
-            .map(|root| FixedBytes::try_from(root.as_slice()))
-            .transpose()?
-            .map(Into::into),
-        blob_gas_used: block.blob_gas_used,
-        excess_blob_gas: block.excess_blob_gas,
-        parent_beacon_block_root: block
-            .parent_beacon_block_root
-            .as_ref()
-            .map(|root| FixedBytes::try_from(root.as_slice()))
-            .transpose()?
-            .map(Into::into),
-        requests_hash: block
-            .requests_hash
-            .as_ref()
-            .map(|root| FixedBytes::try_from(root.as_slice()))
-            .transpose()?
-            .map(Into::into),
-        size: block.size,
-        general_gas_limit: block.general_gas_limit,
-        shared_gas_limit: block.shared_gas_limit,
-        timestamp_millis_part: block.timestamp_millis_part,
-    })
-}
+impl TryFrom<&proto::RpcBlock> for BlockRow {
+    type Error = ParseError;
 
-pub async fn process_block(
-    inserter: &mut Inserter<BlockRow>,
-    block: &RpcBlock,
-) -> Result<(), IndexerError> {
-    let row = block_to_row(block)?;
-    inserter.write(&row).await?;
-    // info!(block = &block.number, "inserted block");
-    Ok(())
+    fn try_from(block: &proto::RpcBlock) -> Result<Self, Self::Error> {
+        Ok(BlockRow {
+            number: block.number,
+            hash: FixedBytes::try_from(block.hash.as_slice())?.into(),
+            timestamp: block.timestamp,
+            parent_hash: FixedBytes::try_from(block.parent_hash.as_slice())?.into(),
+            sha3_uncles: FixedBytes::try_from(block.ommers_hash.as_slice())?.into(),
+            miner: FixedBytes::try_from(block.miner.as_slice())?.into(),
+            state_root: FixedBytes::try_from(block.state_root.as_slice())?.into(),
+            transactions_root: FixedBytes::try_from(block.transactions_root.as_slice())?.into(),
+            receipts_root: FixedBytes::try_from(block.receipts_root.as_slice())?.into(),
+            logs_bloom: Bloom::try_from(block.logs_bloom.as_slice())?.to_string(),
+            difficulty: U256::try_from_le_slice(block.difficulty.as_slice())
+                .unwrap_or_default()
+                .to_string(),
+            gas_limit: block.gas_limit,
+            gas_used: block.gas_used,
+            extra_data: Bytes::from(block.extra_data.clone()).to_string(),
+            mix_hash: FixedBytes::try_from(block.mix_hash.as_slice())?.into(),
+            nonce: B64::try_from(block.nonce.as_slice())?.into(),
+            base_fee_per_gas: block.base_fee_per_gas,
+            withdrawals_root: block
+                .withdrawals_root
+                .as_ref()
+                .map(|root| FixedBytes::try_from(root.as_slice()))
+                .transpose()?
+                .map(Into::into),
+            blob_gas_used: block.blob_gas_used,
+            excess_blob_gas: block.excess_blob_gas,
+            parent_beacon_block_root: block
+                .parent_beacon_block_root
+                .as_ref()
+                .map(|root| FixedBytes::try_from(root.as_slice()))
+                .transpose()?
+                .map(Into::into),
+            requests_hash: block
+                .requests_hash
+                .as_ref()
+                .map(|root| FixedBytes::try_from(root.as_slice()))
+                .transpose()?
+                .map(Into::into),
+            size: block.size,
+            general_gas_limit: block.general_gas_limit,
+            shared_gas_limit: block.shared_gas_limit,
+            timestamp_millis_part: block.timestamp_millis_part,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -72,7 +94,7 @@ mod tests {
     use alloy_primitives::{Address, B256, Bloom, U256};
     use shared::test_utils::make_rpc_block;
 
-    use super::*;
+    use crate::models::block::BlockRow;
 
     // ==================== Happy path ====================
 
@@ -83,7 +105,7 @@ mod tests {
         block.parent_beacon_block_root = Some(B256::with_last_byte(0xbb).to_vec());
         block.requests_hash = Some(B256::with_last_byte(0xcc).to_vec());
 
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
 
         assert_eq!(row.number, 42);
         assert_eq!(row.hash, B256::with_last_byte(0xff).0);
@@ -118,7 +140,7 @@ mod tests {
     fn test_optional_fields_none() {
         let block = make_rpc_block(1);
 
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
 
         assert!(row.withdrawals_root.is_none());
         assert!(row.parent_beacon_block_root.is_none());
@@ -133,49 +155,49 @@ mod tests {
     fn test_hash_wrong_length() {
         let mut block = make_rpc_block(1);
         block.hash = vec![0u8; 31]; // 31 instead of 32
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_miner_wrong_length() {
         let mut block = make_rpc_block(1);
         block.miner = vec![0u8; 33]; // 33 instead of 20
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_logs_bloom_wrong_length() {
         let mut block = make_rpc_block(1);
         block.logs_bloom = vec![0u8; 32]; // 32 instead of 256
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_empty_hash_errors() {
         let mut block = make_rpc_block(1);
         block.hash = vec![];
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_optional_hash_wrong_length() {
         let mut block = make_rpc_block(1);
         block.withdrawals_root = Some(vec![0u8; 10]);
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_parent_beacon_block_root_wrong_length() {
         let mut block = make_rpc_block(1);
         block.parent_beacon_block_root = Some(vec![0u8; 5]);
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     #[test]
     fn test_requests_hash_wrong_length() {
         let mut block = make_rpc_block(1);
         block.requests_hash = Some(vec![0u8; 64]);
-        assert!(block_to_row(&block).is_err());
+        assert!(BlockRow::try_from(&block).is_err());
     }
 
     // ==================== Boundary values ====================
@@ -183,14 +205,14 @@ mod tests {
     #[test]
     fn test_block_number_zero() {
         let block = make_rpc_block(0);
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
         assert_eq!(row.number, 0);
     }
 
     #[test]
     fn test_block_number_max() {
         let block = make_rpc_block(u64::MAX);
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
         assert_eq!(row.number, u64::MAX);
     }
 
@@ -198,7 +220,7 @@ mod tests {
     fn test_difficulty_empty_slice() {
         let mut block = make_rpc_block(1);
         block.difficulty = vec![];
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
         assert_eq!(row.difficulty, U256::ZERO.to_string());
     }
 
@@ -206,7 +228,7 @@ mod tests {
     fn test_difficulty_oversized_slice() {
         let mut block = make_rpc_block(1);
         block.difficulty = vec![0xff; 33]; // > 32 bytes
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
         // try_from_le_slice returns None for >32 bytes, unwrap_or_default gives ZERO
         assert_eq!(row.difficulty, U256::ZERO.to_string());
     }
@@ -216,7 +238,7 @@ mod tests {
         let mut block = make_rpc_block(1);
         block.gas_limit = 0;
         block.gas_used = 0;
-        let row = block_to_row(&block).unwrap();
+        let row = BlockRow::try_from(&block).unwrap();
         assert_eq!(row.gas_limit, 0);
         assert_eq!(row.gas_used, 0);
     }
