@@ -7,7 +7,7 @@ use tempo_primitives::{
     Block, TempoHeader, TempoPrimitives, TempoReceipt, TempoTxEnvelope, TempoTxType,
 };
 
-use crate::proto::RpcBlock;
+use crate::proto::Block as RpcBlock;
 
 pub fn make_header(number: u64, gas_used: u64, base_fee: Option<u64>) -> TempoHeader {
     TempoHeader {

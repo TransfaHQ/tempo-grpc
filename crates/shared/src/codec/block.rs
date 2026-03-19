@@ -1,31 +1,31 @@
-use alloy_consensus::{BlockHeader, Transaction, TxReceipt};
+use alloy_consensus::{BlockHeader, Transaction, TxReceipt, transaction::TxHashRef};
 use alloy_primitives::TxKind;
 use reth::{primitives::RecoveredBlock, providers::Chain};
 use reth_ethereum::primitives::InMemorySize;
 use tempo_primitives::{Block as TempoBlock, TempoPrimitives, TempoReceipt};
 
-use crate::proto;
+use crate::proto::{self, transaction_envelope};
 
 pub fn chain_to_rpc_blocks(
     chain: &Chain<TempoPrimitives>,
     status: proto::BlockStatus,
-) -> eyre::Result<Vec<proto::RpcBlock>> {
+) -> eyre::Result<Vec<proto::Block>> {
     chain
         .blocks_and_receipts()
         .map(|(block, receipts)| {
-            proto::RpcBlock::try_from_blocks_and_receipts(block, receipts, status)
+            proto::Block::try_from_blocks_and_receipts(block, receipts, status)
         })
         .collect()
 }
 
-impl proto::RpcBlock {
+impl proto::Block {
     pub fn try_from_blocks_and_receipts(
         block: &RecoveredBlock<TempoBlock>,
         receipts: &Vec<TempoReceipt>,
         status: proto::BlockStatus,
     ) -> eyre::Result<Self> {
         let receipts_gas_used = compute_gas_used(receipts);
-        Ok(proto::RpcBlock {
+        Ok(proto::Block {
             hash: block.hash().to_vec(),
             parent_hash: block.parent_hash().to_vec(),
             ommers_hash: block.ommers_hash().to_vec(),
@@ -95,11 +95,30 @@ impl proto::RpcBlock {
                     } else {
                         None
                     };
-                    Ok(proto::RpcTransaction {
+                    let signature = match tx {
+                        tempo_primitives::TempoTxEnvelope::Legacy(s) => {
+                            transaction_envelope::Signature::EthSignature(s.signature().into())
+                        }
+                        tempo_primitives::TempoTxEnvelope::Eip2930(s) => {
+                            transaction_envelope::Signature::EthSignature(s.signature().into())
+                        }
+                        tempo_primitives::TempoTxEnvelope::Eip1559(s) => {
+                            transaction_envelope::Signature::EthSignature(s.signature().into())
+                        }
+                        tempo_primitives::TempoTxEnvelope::Eip7702(s) => {
+                            transaction_envelope::Signature::EthSignature(s.signature().into())
+                        }
+                        tempo_primitives::TempoTxEnvelope::AA(s) => {
+                            transaction_envelope::Signature::TempoSignature(s.signature().into())
+                        }
+                    };
+                    Ok(proto::TransactionEnvelope {
                         index: index as u64,
                         transaction: Some(tx.try_into()?),
+                        signature: Some(signature),
                         sender: sender.to_vec(),
-                        receipt: Some(proto::RpcReceipt {
+                        hash: tx.tx_hash().to_vec(),
+                        receipt: Some(proto::Receipt {
                             contract_address: contract_address.map(|a| a.to_vec()),
                             cumulative_gas_used: receipt.cumulative_gas_used,
                             effective_gas_price: effective_gas_price.to_le_bytes().to_vec(),
@@ -165,9 +184,9 @@ fn compute_gas_used(receipts: &[TempoReceipt]) -> Vec<u64> {
 mod tests {
     use std::collections::BTreeMap;
 
-    use alloy_consensus::{Block, BlockBody};
+    use alloy_consensus::BlockBody;
     use alloy_eips::eip4895::Withdrawal;
-    use alloy_primitives::{Address, B256, B64, U256};
+    use alloy_primitives::{Address, B64, B256, U256};
     use reth::{
         primitives::{SealedBlock, SealedHeader},
         providers::ExecutionOutcome,
