@@ -2,7 +2,6 @@
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
 use clap::Parser;
-use reth_exex::BackfillJobFactory;
 use reth_tracing::tracing::info;
 use std::{
     net::{IpAddr, SocketAddr},
@@ -25,10 +24,8 @@ mod server;
 use exex::ExEx;
 use tokio::sync::broadcast;
 
-use crate::server::{BlockStreamService, RemoteExExService};
-use shared::proto::{
-    self, block_stream_server::BlockStreamServer, remote_ex_ex_server::RemoteExExServer,
-};
+use crate::server::BlockStreamService;
+use shared::proto::{self, block_stream_server::BlockStreamServer};
 
 #[derive(Debug, Clone, clap::Args)]
 struct TempoArgs {
@@ -112,17 +109,6 @@ fn main() -> eyre::Result<()> {
 
         let server = Server::builder()
             .add_service(reflection_service)
-            .add_service(
-                RemoteExExServer::new(RemoteExExService {
-                    exex_notifications: notifications_tx.clone(),
-                    backfill_job_factory: BackfillJobFactory::new(
-                        handle.node.evm_config().clone(),
-                        handle.node.provider().clone(),
-                    ),
-                })
-                .max_encoding_message_size(usize::MAX)
-                .max_decoding_message_size(usize::MAX),
-            )
             .add_service(BlockStreamServer::new(BlockStreamService::new(
                 notifications_tx.clone(),
                 handle.node.provider().clone(),

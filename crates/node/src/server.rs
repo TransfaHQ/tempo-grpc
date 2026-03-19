@@ -1,22 +1,18 @@
 use std::{ops::RangeInclusive, sync::Arc, time::Instant};
 
-use eyre::{Context, eyre};
 use futures_util::{StreamExt as _, stream};
 use reth::{
     api::FullNodeComponents,
     builder::{NodeAdapter, RethFullAdapter},
-    providers::{BlockReader, ReceiptProvider, TransactionVariant},
+    providers::{BlockReader, ReceiptProvider},
 };
 use reth_ethereum::provider::db::DatabaseEnv;
-use reth_exex::{BackfillJobFactory, ExExNotification};
+use reth_exex::ExExNotification;
 use reth_tracing::tracing::info;
 use shared::{
     codec::block::chain_to_rpc_blocks,
-    proto::{
-        self, SubscribeRequest, block_stream_server::BlockStream, remote_ex_ex_server::RemoteExEx,
-    },
+    proto::{self, SubscribeRequest, block_stream_server::BlockStream},
 };
-use tempo_evm::TempoEvmConfig;
 use tempo_node::node::TempoNode;
 use tempo_primitives::TempoPrimitives;
 use tokio::sync::{
@@ -27,82 +23,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
 type TempoNodeAdapter = NodeAdapter<RethFullAdapter<Arc<DatabaseEnv>, TempoNode>>;
-
-#[derive(Debug)]
-pub struct RemoteExExService<Node: FullNodeComponents> {
-    pub exex_notifications: Arc<broadcast::Sender<ExExNotification<TempoPrimitives>>>,
-    pub backfill_job_factory: BackfillJobFactory<TempoEvmConfig, Node::Provider>,
-}
-
-#[tonic::async_trait]
-impl RemoteExEx for RemoteExExService<TempoNodeAdapter> {
-    type SubscribeStream = ReceiverStream<Result<proto::ExExNotification, Status>>;
-    type BackfillStream = ReceiverStream<Result<proto::Chain, Status>>;
-
-    async fn subscribe(
-        &self,
-        _request: Request<SubscribeRequest>,
-    ) -> Result<Response<Self::SubscribeStream>, Status> {
-        let (tx, rx) = mpsc::channel(32);
-        let mut receiver = self.exex_notifications.subscribe();
-
-        tokio::spawn(async move {
-            loop {
-                match receiver.recv().await {
-                    Ok(notification) => {
-                        let msg = (&notification)
-                            .try_into()
-                            .map_err(|e: eyre::Error| Status::internal(e.to_string()));
-                        if tx.send(msg).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(RecvError::Lagged(n)) => {
-                        let status = Status::data_loss(format!(
-                            "consumer lagged by {n} messages, reconnect to subscribe"
-                        ));
-                        let _ = tx.send(Err(status)).await;
-                        break;
-                    }
-                    Err(RecvError::Closed) => break,
-                }
-            }
-        });
-
-        Ok(Response::new(ReceiverStream::new(rx)))
-    }
-
-    async fn backfill(
-        &self,
-        request: Request<proto::BackfillRequest>,
-    ) -> Result<Response<Self::BackfillStream>, Status> {
-        let message = request.into_inner();
-        if message.from > message.to {
-            return Err(Status::invalid_argument(
-                "invalid range: from must be <= to",
-            ));
-        }
-        let (tx, rx) = mpsc::channel(32);
-        let job = self
-            .backfill_job_factory
-            .backfill(message.from..=message.to);
-        let mut stream = job.into_stream();
-        tokio::spawn(async move {
-            while let Some(chain) = stream.next().await {
-                let chain = match chain {
-                    Ok(chain) => (&chain)
-                        .try_into()
-                        .map_err(|e: eyre::Error| Status::internal(e.to_string())),
-                    Err(e) => Err(Status::internal(e.to_string())),
-                };
-                if tx.send(chain).await.is_err() {
-                    break;
-                }
-            }
-        });
-        Ok(Response::new(ReceiverStream::new(rx)))
-    }
-}
 
 #[derive(Debug)]
 pub struct BlockStreamService<N: FullNodeComponents> {
@@ -130,7 +50,7 @@ struct Inner<Node: FullNodeComponents> {
 }
 
 impl Inner<TempoNodeAdapter> {
-    fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::RpcBlock>> {
+    fn fetch_block_range(&self, range: RangeInclusive<u64>) -> eyre::Result<Vec<proto::Block>> {
         let t = Instant::now();
         let blocks = self
             .provider
@@ -146,7 +66,7 @@ impl Inner<TempoNodeAdapter> {
             .iter()
             .zip(block_receipts)
             .map(|(block, receipts)| {
-                proto::RpcBlock::try_from_blocks_and_receipts(
+                proto::Block::try_from_blocks_and_receipts(
                     block,
                     &receipts,
                     proto::BlockStatus::Committed,
@@ -161,8 +81,8 @@ impl Inner<TempoNodeAdapter> {
 
 #[tonic::async_trait]
 impl BlockStream for BlockStreamService<TempoNodeAdapter> {
-    type SubscribeStream = ReceiverStream<Result<proto::RpcBlock, Status>>;
-    type BackfillStream = ReceiverStream<Result<proto::RpcBlocks, Status>>;
+    type SubscribeStream = ReceiverStream<Result<proto::Block, Status>>;
+    type BackfillStream = ReceiverStream<Result<proto::BlockChunk, Status>>;
 
     async fn subscribe(
         &self,
@@ -262,7 +182,7 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
                 let count = blocks.len();
                 let t = Instant::now();
                 if tx
-                    .send(Ok(proto::RpcBlocks { items: blocks }))
+                    .send(Ok(proto::BlockChunk { items: blocks }))
                     .await
                     .is_err()
                 {
