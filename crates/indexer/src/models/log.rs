@@ -1,12 +1,10 @@
 use crate::models::error::ParseError;
 
 use super::{Address, Hash};
-use alloy_primitives::{Bytes, FixedBytes};
+use alloy_primitives::FixedBytes;
 use clickhouse::Row;
-use clickhouse::types::UInt256;
 use serde::{Deserialize, Serialize};
-use shared::proto::{self, RpcBlock};
-use tempo_primitives::TempoTxType;
+use shared::proto::{self, Block};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
 pub struct LogRow {
@@ -24,7 +22,7 @@ pub struct LogRow {
 pub fn log_to_row(
     log: &proto::Log,
     index: u64,
-    block: &RpcBlock,
+    block: &Block,
     tx_index: u64,
     tx_hash: &Vec<u8>,
 ) -> Result<LogRow, ParseError> {

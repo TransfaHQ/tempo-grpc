@@ -126,12 +126,8 @@ async fn main() -> eyre::Result<()> {
                                     .receipt
                                     .as_ref()
                                     .ok_or(ParseError::MissingField("transaction"))?;
-                                let inner = tx
-                                    .transaction
-                                    .as_ref()
-                                    .ok_or(ParseError::MissingField("transaction.transaction"))?;
                                 for log in &receipt.logs {
-                                    logs.push((tx.index, &inner.hash, log));
+                                    logs.push((tx.index, &tx.hash, log));
                                 }
                             }
                             for (tx_index, tx_hash, log) in logs {

@@ -16,5 +16,5 @@ pub enum IndexerError {
     #[error(transparent)]
     GRPC(#[from] Status),
     #[error(transparent)]
-    Sender(#[from] SendError<Vec<proto::RpcBlock>>),
+    Sender(#[from] SendError<Vec<proto::Block>>),
 }

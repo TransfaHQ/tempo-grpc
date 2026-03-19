@@ -28,20 +28,6 @@ pub struct TransactionRow {
     pub fee_token: Option<Address>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Row)]
-pub struct Call {
-    pub input: String,
-    pub value: UInt256,
-    pub to: Option<Address>,
-}
-
-fn bytes_to_u64(bytes: &[u8]) -> u64 {
-    let mut buf = [0u8; 8];
-    let len = bytes.len().min(8);
-    buf[..len].copy_from_slice(&bytes[..len]);
-    u64::from_le_bytes(buf)
-}
-
 fn bytes_to_u128(bytes: &[u8]) -> u128 {
     let mut buf = [0u8; 16];
     let len = bytes.len().min(16);
@@ -70,33 +56,28 @@ fn tx_kind_to_address(kind: &Option<proto::TxKind>) -> Result<Option<Address>, P
 }
 
 pub fn txn_to_row(
-    block: &proto::RpcBlock,
-    value: &proto::RpcTransaction,
+    block: &proto::Block,
+    envelope: &proto::TransactionEnvelope,
 ) -> Result<TransactionRow, ParseError> {
-    let txn = value
+    let txn = envelope
         .transaction
         .as_ref()
         .ok_or(ParseError::MissingField("transaction"))?;
 
-    let receipt = value
+    let receipt = envelope
         .receipt
         .as_ref()
         .ok_or(ParseError::MissingField("receipt"))?;
-    // todo: fix transaction.transaction nesting
-    let inner = txn
-        .transaction
-        .as_ref()
-        .ok_or(ParseError::MissingField("transaction.transaction"))?;
 
-    let hash: Hash = FixedBytes::try_from(txn.hash.as_slice())?.into();
-    let from_address: Address = FixedBytes::try_from(value.sender.as_slice())?.into();
+    let hash: Hash = FixedBytes::try_from(envelope.hash.as_slice())?.into();
+    let from_address: Address = FixedBytes::try_from(envelope.sender.as_slice())?.into();
 
-    match inner {
-        proto::transaction::Transaction::Legacy(t) => Ok(TransactionRow {
+    match txn {
+        proto::transaction_envelope::Transaction::Legacy(t) => Ok(TransactionRow {
             hash,
             block_number: block.number,
             block_timestamp: block.timestamp,
-            tx_index: value.index,
+            tx_index: envelope.index,
             from_address,
             to_address: tx_kind_to_address(&t.to)?,
             value: bytes_to_uint256(&t.value),
@@ -108,11 +89,11 @@ pub fn txn_to_row(
             fee_token: None,
             calls: vec![],
         }),
-        proto::transaction::Transaction::Eip2930(t) => Ok(TransactionRow {
+        proto::transaction_envelope::Transaction::Eip2930(t) => Ok(TransactionRow {
             hash,
             block_number: block.number,
             block_timestamp: block.timestamp,
-            tx_index: value.index,
+            tx_index: envelope.index,
             from_address,
             to_address: tx_kind_to_address(&t.to)?,
             value: bytes_to_uint256(&t.value),
@@ -124,11 +105,11 @@ pub fn txn_to_row(
             calls: vec![],
             tx_type: TempoTxType::Eip2930.into(),
         }),
-        proto::transaction::Transaction::Eip1559(t) => Ok(TransactionRow {
+        proto::transaction_envelope::Transaction::Eip1559(t) => Ok(TransactionRow {
             hash,
             block_number: block.number,
             block_timestamp: block.timestamp,
-            tx_index: value.index,
+            tx_index: envelope.index,
             from_address,
             to_address: tx_kind_to_address(&t.to)?,
             value: bytes_to_uint256(&t.value),
@@ -140,11 +121,11 @@ pub fn txn_to_row(
             calls: vec![],
             tx_type: TempoTxType::Eip1559.into(),
         }),
-        proto::transaction::Transaction::Eip7702(t) => Ok(TransactionRow {
+        proto::transaction_envelope::Transaction::Eip7702(t) => Ok(TransactionRow {
             hash,
             block_number: block.number,
             block_timestamp: block.timestamp,
-            tx_index: value.index,
+            tx_index: envelope.index,
             from_address,
             to_address: Some(FixedBytes::try_from(t.to.as_slice())?.into()),
             value: bytes_to_uint256(&t.value),
@@ -156,11 +137,11 @@ pub fn txn_to_row(
             calls: vec![],
             tx_type: TempoTxType::Eip7702.into(),
         }),
-        proto::transaction::Transaction::Tempo(t) => Ok(TransactionRow {
+        proto::transaction_envelope::Transaction::Tempo(t) => Ok(TransactionRow {
             hash,
             block_number: block.number,
             block_timestamp: block.timestamp,
-            tx_index: value.index,
+            tx_index: envelope.index,
             from_address,
             to_address: match t.calls.first() {
                 Some(call) => tx_kind_to_address(&call.to)?,

@@ -1,7 +1,7 @@
 use crate::models::error::ParseError;
 
 use super::{Address, Hash};
-use alloy_primitives::{B64, Bloom, Bytes, FixedBytes, U256};
+use alloy_primitives::{B64, FixedBytes};
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
 use shared::proto;
@@ -22,10 +22,10 @@ pub struct BlockRow {
     pub size: u64,
 }
 
-impl TryFrom<&proto::RpcBlock> for BlockRow {
+impl TryFrom<&proto::Block> for BlockRow {
     type Error = ParseError;
 
-    fn try_from(block: &proto::RpcBlock) -> Result<Self, Self::Error> {
+    fn try_from(block: &proto::Block) -> Result<Self, Self::Error> {
         Ok(BlockRow {
             number: block.number,
             hash: FixedBytes::try_from(block.hash.as_slice())?.into(),
