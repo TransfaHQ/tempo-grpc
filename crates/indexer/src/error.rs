@@ -1,6 +1,7 @@
 use async_channel::{RecvError, SendError};
 use shared::proto;
 use thiserror::Error;
+use tokio::task::JoinError;
 use tonic::Status;
 
 use crate::models::error::ParseError;
@@ -17,4 +18,8 @@ pub enum IndexerError {
     GRPC(#[from] Status),
     #[error(transparent)]
     Sender(#[from] SendError<Vec<proto::Block>>),
+    #[error(transparent)]
+    Tonic(#[from] tonic::transport::Error),
+    #[error(transparent)]
+    Join(#[from] JoinError),
 }
