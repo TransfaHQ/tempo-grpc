@@ -20,7 +20,9 @@ use tempo_node::{TempoNodeArgs, node::TempoNode};
 
 mod defaults;
 mod exex;
+mod notifications;
 mod server;
+mod streaming;
 use exex::ExEx;
 use tokio::sync::broadcast;
 
@@ -107,11 +109,12 @@ fn main() -> eyre::Result<()> {
             .await
             .wrap_err("failed launching execution node")?;
 
+        let provider = Arc::new(handle.node.provider().clone());
         let server = Server::builder()
             .add_service(reflection_service)
             .add_service(BlockStreamServer::new(BlockStreamService::new(
                 notifications_tx.clone(),
-                handle.node.provider().clone(),
+                provider.clone(),
             )))
             .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
         handle

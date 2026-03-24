@@ -19,6 +19,7 @@ tempo-eyre = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
 tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
 
 clap = { version = "4.5.57", features = ["derive", "env"] }
+thiserror = "2.0"
 eyre = "0.6" # Easy error handling
 futures-util = "0.3"
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
