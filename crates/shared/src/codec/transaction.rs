@@ -4,10 +4,8 @@ use tempo_primitives::{
     transaction::{KeychainVersion, PrimitiveSignature},
 };
 
-impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope::Transaction {
-    type Error = eyre::Error;
-
-    fn try_from(transaction: &tempo_primitives::TempoTxEnvelope) -> Result<Self, Self::Error> {
+impl From<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope::Transaction {
+    fn from(transaction: &tempo_primitives::TempoTxEnvelope) -> Self {
         match transaction {
             TempoTxEnvelope::Legacy(signed) => {
                 let alloy_consensus::TxLegacy {
@@ -19,17 +17,15 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope
                     value,
                     input,
                 } = signed.tx();
-                Ok(proto::transaction_envelope::Transaction::Legacy(
-                    proto::TransactionLegacy {
-                        chain_id: *chain_id,
-                        nonce: *nonce,
-                        gas_price: gas_price.to_le_bytes().to_vec(),
-                        gas_limit: gas_limit.to_le_bytes().to_vec(),
-                        to: Some(to.into()),
-                        value: value.to_le_bytes_vec(),
-                        input: input.to_vec(),
-                    },
-                ))
+                proto::transaction_envelope::Transaction::Legacy(proto::TransactionLegacy {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_price: gas_price.to_le_bytes().to_vec(),
+                    gas_limit: gas_limit.to_le_bytes().to_vec(),
+                    to: Some(to.into()),
+                    value: value.to_le_bytes_vec(),
+                    input: input.to_vec(),
+                })
             }
             TempoTxEnvelope::Eip2930(signed) => {
                 let alloy_consensus::TxEip2930 {
@@ -42,18 +38,16 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope
                     access_list,
                     input,
                 } = signed.tx();
-                Ok(proto::transaction_envelope::Transaction::Eip2930(
-                    proto::TransactionEip2930 {
-                        chain_id: *chain_id,
-                        nonce: *nonce,
-                        gas_price: gas_price.to_le_bytes().to_vec(),
-                        gas_limit: gas_limit.to_le_bytes().to_vec(),
-                        to: Some(to.into()),
-                        value: value.to_le_bytes_vec(),
-                        access_list: access_list.iter().map(Into::into).collect(),
-                        input: input.to_vec(),
-                    },
-                ))
+                proto::transaction_envelope::Transaction::Eip2930(proto::TransactionEip2930 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_price: gas_price.to_le_bytes().to_vec(),
+                    gas_limit: gas_limit.to_le_bytes().to_vec(),
+                    to: Some(to.into()),
+                    value: value.to_le_bytes_vec(),
+                    access_list: access_list.iter().map(Into::into).collect(),
+                    input: input.to_vec(),
+                })
             }
             TempoTxEnvelope::Eip1559(signed) => {
                 let alloy_consensus::TxEip1559 {
@@ -67,19 +61,17 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope
                     access_list,
                     input,
                 } = signed.tx();
-                Ok(proto::transaction_envelope::Transaction::Eip1559(
-                    proto::TransactionEip1559 {
-                        chain_id: *chain_id,
-                        nonce: *nonce,
-                        gas_limit: gas_limit.to_le_bytes().to_vec(),
-                        max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
-                        max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
-                        to: Some(to.into()),
-                        value: value.to_le_bytes_vec(),
-                        access_list: access_list.iter().map(Into::into).collect(),
-                        input: input.to_vec(),
-                    },
-                ))
+                proto::transaction_envelope::Transaction::Eip1559(proto::TransactionEip1559 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_limit: gas_limit.to_le_bytes().to_vec(),
+                    max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
+                    to: Some(to.into()),
+                    value: value.to_le_bytes_vec(),
+                    access_list: access_list.iter().map(Into::into).collect(),
+                    input: input.to_vec(),
+                })
             }
             TempoTxEnvelope::Eip7702(signed) => {
                 let alloy_consensus::TxEip7702 {
@@ -109,79 +101,72 @@ impl TryFrom<&tempo_primitives::TempoTxEnvelope> for proto::transaction_envelope
                         }),
                     })
                     .collect();
-                Ok(proto::transaction_envelope::Transaction::Eip7702(
-                    proto::TransactionEip7702 {
-                        chain_id: *chain_id,
-                        nonce: *nonce,
-                        gas_limit: gas_limit.to_le_bytes().to_vec(),
-                        max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
-                        max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
-                        to: to.to_vec(),
-                        value: value.to_le_bytes_vec(),
-                        access_list: access_list.iter().map(Into::into).collect(),
-                        authorization_list,
-                        input: input.to_vec(),
-                    },
-                ))
+                proto::transaction_envelope::Transaction::Eip7702(proto::TransactionEip7702 {
+                    chain_id: *chain_id,
+                    nonce: *nonce,
+                    gas_limit: gas_limit.to_le_bytes().to_vec(),
+                    max_fee_per_gas: max_fee_per_gas.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: max_priority_fee_per_gas.to_le_bytes().to_vec(),
+                    to: to.to_vec(),
+                    value: value.to_le_bytes_vec(),
+                    access_list: access_list.iter().map(Into::into).collect(),
+                    authorization_list,
+                    input: input.to_vec(),
+                })
             }
             TempoTxEnvelope::AA(signed) => {
                 let tx = signed.tx();
 
-                let transaction =
-                    proto::transaction_envelope::Transaction::Tempo(proto::TransactionTempo {
-                        chain_id: tx.chain_id,
-                        max_fee_per_gas: tx.max_fee_per_gas.to_le_bytes().to_vec(),
-                        max_priority_fee_per_gas: tx
-                            .max_priority_fee_per_gas
-                            .to_le_bytes()
-                            .to_vec(),
-                        gas_limit: tx.gas_limit,
-                        calls: tx
-                            .calls
-                            .iter()
-                            .map(|call| proto::Call {
-                                to: Some((&call.to).into()),
-                                value: call.value.to_le_bytes::<32>().to_vec(),
-                                input: call.input.to_vec(),
-                            })
-                            .collect(),
-                        access_list: tx.access_list.iter().map(Into::into).collect(),
-                        nonce_key: tx.nonce_key.to_le_bytes::<32>().to_vec(),
-                        nonce: tx.nonce,
-                        fee_token: tx.fee_token.map(|ft| ft.to_vec()),
-                        fee_payer_signature: tx.fee_payer_signature.map(|sig| (&sig).into()),
-                        valid_before: tx.valid_before,
-                        valid_after: tx.valid_after,
-                        key_authorization: tx.key_authorization.as_ref().map(|ka| {
-                            proto::KeyAuthorization {
-                                chain_id: ka.chain_id,
-                                key_type: (ka.key_type as u8).into(),
-                                key_id: ka.key_id.to_vec(),
-                                expiry: ka.expiry,
-                                limits: ka.limits.as_ref().map(|limits| proto::TokenLimits {
-                                    items: limits
-                                        .iter()
-                                        .map(|limit| proto::TokenLimit {
-                                            token: limit.token.to_vec(),
-                                            limit: limit.limit.to_le_bytes::<32>().to_vec(),
-                                        })
-                                        .collect(),
-                                }),
-                                signature: Some((&ka.signature).into()),
-                            }
-                        }),
-                        aa_authorization_list: tx
-                            .tempo_authorization_list
-                            .iter()
-                            .map(|item| proto::TempoAuthorization {
-                                chain_id: item.chain_id.to_le_bytes_vec(),
-                                address: item.address.to_vec(),
-                                nonce: item.nonce,
-                                signature: Some(item.signature().into()),
-                            })
-                            .collect(),
-                    });
-                Ok(transaction)
+                proto::transaction_envelope::Transaction::Tempo(proto::TransactionTempo {
+                    chain_id: tx.chain_id,
+                    max_fee_per_gas: tx.max_fee_per_gas.to_le_bytes().to_vec(),
+                    max_priority_fee_per_gas: tx.max_priority_fee_per_gas.to_le_bytes().to_vec(),
+                    gas_limit: tx.gas_limit,
+                    calls: tx
+                        .calls
+                        .iter()
+                        .map(|call| proto::Call {
+                            to: Some((&call.to).into()),
+                            value: call.value.to_le_bytes::<32>().to_vec(),
+                            input: call.input.to_vec(),
+                        })
+                        .collect(),
+                    access_list: tx.access_list.iter().map(Into::into).collect(),
+                    nonce_key: tx.nonce_key.to_le_bytes::<32>().to_vec(),
+                    nonce: tx.nonce,
+                    fee_token: tx.fee_token.map(|ft| ft.to_vec()),
+                    fee_payer_signature: tx.fee_payer_signature.map(|sig| (&sig).into()),
+                    valid_before: tx.valid_before,
+                    valid_after: tx.valid_after,
+                    key_authorization: tx.key_authorization.as_ref().map(|ka| {
+                        proto::KeyAuthorization {
+                            chain_id: ka.chain_id,
+                            key_type: (ka.key_type as u8).into(),
+                            key_id: ka.key_id.to_vec(),
+                            expiry: ka.expiry,
+                            limits: ka.limits.as_ref().map(|limits| proto::TokenLimits {
+                                items: limits
+                                    .iter()
+                                    .map(|limit| proto::TokenLimit {
+                                        token: limit.token.to_vec(),
+                                        limit: limit.limit.to_le_bytes::<32>().to_vec(),
+                                    })
+                                    .collect(),
+                            }),
+                            signature: Some((&ka.signature).into()),
+                        }
+                    }),
+                    aa_authorization_list: tx
+                        .tempo_authorization_list
+                        .iter()
+                        .map(|item| proto::TempoAuthorization {
+                            chain_id: item.chain_id.to_le_bytes_vec(),
+                            address: item.address.to_vec(),
+                            nonce: item.nonce,
+                            signature: Some(item.signature().into()),
+                        })
+                        .collect(),
+                })
             }
         }
     }

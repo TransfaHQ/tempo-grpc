@@ -1,4 +1,5 @@
 pub mod codec;
+pub mod error;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;

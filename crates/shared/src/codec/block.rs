@@ -4,12 +4,15 @@ use reth::{primitives::RecoveredBlock, providers::Chain};
 use reth_ethereum::primitives::InMemorySize;
 use tempo_primitives::{Block as TempoBlock, TempoPrimitives, TempoReceipt};
 
-use crate::proto::{self, transaction_envelope};
+use crate::{
+    error::CodecError,
+    proto::{self, transaction_envelope},
+};
 
 pub fn chain_to_rpc_blocks(
     chain: &Chain<TempoPrimitives>,
     status: proto::BlockStatus,
-) -> eyre::Result<Vec<proto::Block>> {
+) -> Result<Vec<proto::Block>, CodecError> {
     chain
         .blocks_and_receipts()
         .map(|(block, receipts)| {
@@ -23,7 +26,7 @@ impl proto::Block {
         block: &RecoveredBlock<TempoBlock>,
         receipts: &Vec<TempoReceipt>,
         status: proto::BlockStatus,
-    ) -> eyre::Result<Self> {
+    ) -> Result<Self, CodecError> {
         let receipts_gas_used = compute_gas_used(receipts);
         Ok(proto::Block {
             hash: block.hash().to_vec(),
@@ -114,7 +117,7 @@ impl proto::Block {
                     };
                     Ok(proto::TransactionEnvelope {
                         index: index as u64,
-                        transaction: Some(tx.try_into()?),
+                        transaction: Some(tx.into()),
                         signature: Some(signature),
                         sender: sender.to_vec(),
                         hash: tx.tx_hash().to_vec(),
@@ -161,7 +164,7 @@ impl proto::Block {
                         }),
                     })
                 })
-                .collect::<eyre::Result<_>>()?,
+                .collect::<Result<_, CodecError>>()?,
         })
     }
 }

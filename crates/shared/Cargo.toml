@@ -15,7 +15,7 @@ reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v
 reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
 tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
 
-eyre = "0.6" # Easy error handling
+thiserror = "2.0"
 prost = "0.14.3"
 tonic = "0.14.5"
 tonic-prost = "*"
