@@ -28,6 +28,8 @@ impl From<StreamingError> for Status {
 pub enum BackfillError {
     #[error("invalid range from: {from} must <= to: {to}")]
     InvalidRange { from: u64, to: u64 },
+    #[error("invalid batch size: {0} should be > 0")]
+    InvalidBatchSize(u64),
     #[error(transparent)]
     RethProviderError(#[from] ProviderError),
     #[error(transparent)]
@@ -40,10 +42,10 @@ pub enum BackfillError {
 
 impl From<BackfillError> for Status {
     fn from(value: BackfillError) -> Self {
-        if let BackfillError::InvalidRange { .. } = value {
-            Self::invalid_argument(value.to_string())
-        } else {
-            Self::internal(value.to_string())
+        match value {
+            BackfillError::InvalidRange { .. } => Self::invalid_argument(value.to_string()),
+            BackfillError::InvalidBatchSize(_) => Self::invalid_argument(value.to_string()),
+            _ => Status::internal(value.to_string()),
         }
     }
 }

@@ -20,7 +20,6 @@ use tempo_node::{TempoNodeArgs, node::TempoNode};
 
 mod defaults;
 mod exex;
-mod notifications;
 mod server;
 mod streaming;
 use exex::ExEx;

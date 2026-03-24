@@ -10,9 +10,9 @@ use shared::proto;
 use tempo_node::node::TempoNode;
 use tempo_primitives::TempoPrimitives;
 use tokio::sync::broadcast;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 
-use crate::notifications::chain::NewChainNotification;
 use crate::streaming::error::BackfillError;
 
 pub type TempoRethProvider =
@@ -29,6 +29,10 @@ pub async fn backfill(
             to: request.to,
         });
     }
+    if request.size == 0 {
+        return Err(BackfillError::InvalidBatchSize(request.size));
+    }
+
     let chunks: Vec<_> = (request.from..=request.to)
         .step_by(request.size as usize)
         .map(|start| (start, (start + request.size - 1).min(request.to)))
@@ -51,21 +55,31 @@ pub async fn backfill(
 pub async fn backfill_to_live(
     sender: &mpsc::Sender<proto::BlockChunk>,
     request: proto::BackfillToLiveRequest,
-    exex_notification_rx: broadcast::Receiver<ExExNotification<TempoPrimitives>>,
+    mut exex_notification_rx: broadcast::Receiver<ExExNotification<TempoPrimitives>>,
     provider: &Arc<TempoRethProvider>,
 ) -> Result<(), BackfillError> {
-    let mut chain_rx = NewChainNotification::emit_from(exex_notification_rx);
+    let mut from = request.from;
     loop {
-        let Some(notification) = chain_rx.recv().await else {
-            return Ok(());
-        };
-        let tip = notification.new_chain().range().end().clone();
-        let request = proto::BackfillRequest {
-            from: request.from,
-            to: tip,
-            size: request.size,
-        };
-        backfill(&sender, request, provider).await?;
+        match exex_notification_rx.recv().await {
+            Ok(notification) => {
+                let Some(chain) = notification.committed_chain() else {
+                    continue;
+                };
+                let tip = chain.range().end().clone();
+                if tip < from {
+                    continue;
+                }
+                let request = proto::BackfillRequest {
+                    from: from,
+                    to: tip,
+                    size: request.size,
+                };
+                backfill(&sender, request, provider).await?;
+                from = tip + 1;
+            }
+            Err(RecvError::Lagged(_)) => continue,
+            Err(RecvError::Closed) => return Ok(()),
+        }
     }
 }
 
