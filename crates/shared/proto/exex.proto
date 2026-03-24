@@ -7,8 +7,9 @@ import "google/protobuf/empty.proto";
 
 
 service BlockStream {
-  rpc Subscribe(SubscribeRequest) returns (stream Block) {}
+  rpc Subscribe(SubscribeRequest) returns (stream BlockChunk) {}
   rpc Backfill(BackfillRequest) returns (stream BlockChunk) {}
+  rpc BackfillToLive(BackfillToLiveRequest) returns (stream BlockChunk) {}
 }
 
 message SubscribeRequest {}
@@ -17,6 +18,11 @@ message BackfillRequest {
   uint64 from = 1;
   uint64 to = 2;
   uint64 size = 3;
+}
+
+message BackfillToLiveRequest {
+  uint64 from = 1;
+  uint64 size = 2;
 }
 
 message BlockChunk {
