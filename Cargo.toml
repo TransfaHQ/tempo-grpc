@@ -3,6 +3,67 @@ resolver = "3"
 
 members = ["crates/indexer", "crates/node", "crates/shared"]
 
+[workspace.dependencies]
+# Internal
+shared = { path = "crates/shared" }
+
+# Reth
+reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+
+# Tempo
+tempo-node = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-chainspec = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-consensus = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-evm = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-eyre = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+
+# Alloy
+alloy-eips = { version = "1.6.1", default-features = false }
+alloy-consensus = { version = "1.6.1", default-features = false }
+alloy-primitives = { version = "1.5.4", default-features = false }
+
+# gRPC / Protobuf
+tonic = "0.14.5"
+tonic-reflection = "0.14.5"
+tonic-prost = "*"
+tonic-prost-build = "*"
+prost = "0.14.3"
+
+# Async
+tokio = "1.50.0"
+tokio-stream = "0.1"
+tokio-util = "0.7.18"
+futures-util = "0.3"
+async-channel = "2.5.0"
+
+# Error handling
+thiserror = "2.0"
+eyre = "0.6"
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+serde_bytes = "0.11.19"
+
+# CLI
+clap = { version = "4.5.57", features = ["derive", "env"] }
+
+# Observability
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+
+# Misc
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+clickhouse = { version = "0.14", features = ["inserter", "lz4", "native-tls"] }
+rand = "0.10.0"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

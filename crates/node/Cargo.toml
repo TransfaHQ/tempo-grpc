@@ -4,33 +4,32 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Reth
-reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Execution Extensions
-reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" } # Logging
-tempo-node = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
-tempo-chainspec = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
-tempo-consensus = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
-tempo-evm = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
-tempo-eyre = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
-tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.4.0" }
+reth.workspace = true
+reth-ethereum.workspace = true
+reth-cli-util.workspace = true
+reth-ethereum-cli.workspace = true
+reth-exex.workspace = true
+reth-rpc-server-types.workspace = true
+reth-tracing.workspace = true
+tempo-node.workspace = true
+tempo-chainspec.workspace = true
+tempo-consensus.workspace = true
+tempo-evm.workspace = true
+tempo-eyre.workspace = true
+tempo-primitives.workspace = true
 
-clap = { version = "4.5.57", features = ["derive", "env"] }
-thiserror = "2.0"
-eyre = "0.6" # Easy error handling
-futures-util = "0.3"
-rustls = { version = "0.23", default-features = false, features = ["ring"] }
-tokio = "1.50.0"
-tokio-stream = "0.1"
-tonic = "0.14.5"
-tonic-reflection = "0.14.5"
+clap.workspace = true
+thiserror.workspace = true
+eyre.workspace = true
+futures-util.workspace = true
+rustls.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+tonic-reflection.workspace = true
+tracing.workspace = true
 
-shared = { path = "../shared" }
-tracing = "0.1.44"
-
+shared.workspace = true
 
 [features]
 default = ["asm-keccak", "jemalloc", "otlp"]
@@ -53,4 +52,3 @@ otlp = [
 	"reth-ethereum/otlp",
 	"tempo-node/otlp",
 ]
-
