@@ -5,7 +5,7 @@ use alloy_primitives::{Bytes, FixedBytes};
 use clickhouse::Row;
 use clickhouse::types::UInt256;
 use serde::{Deserialize, Serialize};
-use shared::proto;
+use shared::proto::{self, BlockStatus};
 use tempo_primitives::TempoTxType;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
@@ -26,6 +26,7 @@ pub struct TransactionRow {
     // (input, value, to)
     pub calls: Vec<(String, UInt256, Option<Address>)>,
     pub fee_token: Option<Address>,
+    pub is_deleted: bool,
 }
 
 fn bytes_to_u128(bytes: &[u8]) -> u128 {
@@ -88,6 +89,7 @@ pub fn txn_to_row(
             tx_type: TempoTxType::Legacy.into(),
             fee_token: None,
             calls: vec![],
+            is_deleted: block.status != BlockStatus::Committed as i32,
         }),
         proto::transaction_envelope::Transaction::Eip2930(t) => Ok(TransactionRow {
             hash,
@@ -104,6 +106,7 @@ pub fn txn_to_row(
             fee_token: None,
             calls: vec![],
             tx_type: TempoTxType::Eip2930.into(),
+            is_deleted: block.status != BlockStatus::Committed as i32,
         }),
         proto::transaction_envelope::Transaction::Eip1559(t) => Ok(TransactionRow {
             hash,
@@ -120,6 +123,7 @@ pub fn txn_to_row(
             fee_token: None,
             calls: vec![],
             tx_type: TempoTxType::Eip1559.into(),
+            is_deleted: block.status != BlockStatus::Committed as i32,
         }),
         proto::transaction_envelope::Transaction::Eip7702(t) => Ok(TransactionRow {
             hash,
@@ -136,6 +140,7 @@ pub fn txn_to_row(
             fee_token: None,
             calls: vec![],
             tx_type: TempoTxType::Eip7702.into(),
+            is_deleted: block.status != BlockStatus::Committed as i32,
         }),
         proto::transaction_envelope::Transaction::Tempo(t) => Ok(TransactionRow {
             hash,
@@ -173,6 +178,7 @@ pub fn txn_to_row(
                 })
                 .collect::<Result<Vec<_>, ParseError>>()?,
             tx_type: TempoTxType::AA.into(),
+            is_deleted: block.status != BlockStatus::Committed as i32,
         }),
     }
 }

@@ -4,7 +4,7 @@ use super::{Address, Hash};
 use alloy_primitives::{B64, FixedBytes};
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
-use shared::proto;
+use shared::proto::{self, BlockStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
 pub struct BlockRow {
@@ -20,6 +20,7 @@ pub struct BlockRow {
     pub extra_data: Vec<u8>,
     pub nonce: [u8; 8],
     pub size: u64,
+    pub is_deleted: bool,
 }
 
 impl TryFrom<&proto::Block> for BlockRow {
@@ -38,6 +39,7 @@ impl TryFrom<&proto::Block> for BlockRow {
             extra_data: block.extra_data.clone(),
             nonce: B64::try_from(block.nonce.as_slice())?.into(),
             size: block.size,
+            is_deleted: block.status != BlockStatus::Committed as i32,
         })
     }
 }

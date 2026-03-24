@@ -3,7 +3,9 @@ use std::sync::Arc;
 use async_channel::{Receiver, Sender};
 use clap::Parser;
 use clickhouse::{Client, inserter::Inserter};
-use shared::proto::{BackfillRequest, Block, block_stream_client::BlockStreamClient};
+use shared::proto::{
+    BackfillRequest, BackfillToLiveRequest, Block, block_stream_client::BlockStreamClient,
+};
 use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -30,7 +32,7 @@ pub struct IndexerArgs {
     from: u64,
 
     #[arg(long)]
-    to: u64,
+    to: Option<u64>,
 
     #[arg(long)]
     ch_url: String,
@@ -96,12 +98,22 @@ impl Indexer {
         let mut client = BlockStreamClient::connect(grpc_url)
             .await?
             .max_decoding_message_size(usize::MAX);
-        let request = Request::new(BackfillRequest {
-            from: self.args.from,
-            to: self.args.to,
-            size: self.args.batch_size,
-        });
-        let response = client.backfill(request).await?;
+        let response = {
+            if let Some(to) = self.args.to {
+                let request = Request::new(BackfillRequest {
+                    from: self.args.from,
+                    to: to,
+                    size: self.args.batch_size,
+                });
+                client.backfill(request).await?
+            } else {
+                let request = Request::new(BackfillToLiveRequest {
+                    from: self.args.from,
+                    size: self.args.batch_size,
+                });
+                client.backfill_to_live(request).await?
+            }
+        };
         let mut stream = response.into_inner();
         let cancel_token = self.shutdown_token.child_token();
         self.handles.spawn(async move {

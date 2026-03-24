@@ -4,7 +4,7 @@ use super::{Address, Hash};
 use alloy_primitives::FixedBytes;
 use clickhouse::Row;
 use serde::{Deserialize, Serialize};
-use shared::proto::{self, Block};
+use shared::proto::{self, Block, BlockStatus};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Row)]
 pub struct LogRow {
@@ -17,6 +17,7 @@ pub struct LogRow {
     pub topics: Vec<Hash>,
     #[serde(with = "serde_bytes")]
     pub data: Vec<u8>,
+    pub is_deleted: bool,
 }
 
 pub fn log_to_row(
@@ -43,5 +44,6 @@ pub fn log_to_row(
             .map(|topic| Ok(FixedBytes::try_from(topic.as_slice())?.into()))
             .collect::<Result<Vec<_>, ParseError>>()?,
         data: data.data.clone(),
+        is_deleted: block.status != BlockStatus::Committed as i32,
     })
 }
