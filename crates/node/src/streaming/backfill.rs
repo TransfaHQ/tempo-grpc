@@ -15,8 +15,7 @@ use tokio::sync::mpsc;
 
 use crate::streaming::error::BackfillError;
 
-pub type TempoRethProvider =
-    BlockchainProvider<NodeTypesWithDBAdapter<TempoNode, Arc<DatabaseEnv>>>;
+pub type TempoRethProvider = BlockchainProvider<NodeTypesWithDBAdapter<TempoNode, DatabaseEnv>>;
 
 pub async fn backfill(
     sender: &mpsc::Sender<proto::BlockChunk>,

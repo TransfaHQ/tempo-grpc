@@ -18,7 +18,7 @@ use tonic::{Request, Response, Status};
 
 use crate::streaming;
 
-type TempoNodeAdapter = NodeAdapter<RethFullAdapter<Arc<DatabaseEnv>, TempoNode>>;
+type TempoNodeAdapter = NodeAdapter<RethFullAdapter<DatabaseEnv, TempoNode>>;
 
 #[derive(Debug)]
 pub struct BlockStreamService<N: FullNodeComponents> {

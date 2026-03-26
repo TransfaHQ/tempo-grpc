@@ -119,7 +119,7 @@ fn main() -> eyre::Result<()> {
         handle
             .node
             .task_executor
-            .spawn_critical("grpc", async move {
+            .spawn_critical_task("grpc", async move {
                 info!(
                     "GRPC server started at {}",
                     SocketAddr::new(args.grpc_addr, args.grpc_port)

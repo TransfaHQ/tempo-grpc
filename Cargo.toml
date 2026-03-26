@@ -8,13 +8,13 @@ members = ["crates/indexer", "crates/node", "crates/shared"]
 shared = { path = "crates/shared" }
 
 # Reth
-reth = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-cli-util = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
-reth-tracing = { git = "https://github.com/paradigmxyz/reth", branch = "tempo/v1.10.2" }
+reth = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-ethereum = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-cli-util = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-ethereum-cli = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-exex = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-rpc-server-types = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
+reth-tracing = { git = "https://github.com/paradigmxyz/reth", rev = "72d0e04"}
 
 # Tempo
 tempo-node = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.5.0" }
@@ -25,9 +25,9 @@ tempo-eyre = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.5.0" }
 tempo-primitives = { git = "https://github.com/tempoxyz/tempo.git", tag = "v1.5.0" }
 
 # Alloy
-alloy-eips = { version = "1.6.1", default-features = false }
-alloy-consensus = { version = "1.6.1", default-features = false }
-alloy-primitives = { version = "1.5.4", default-features = false }
+alloy-eips = { version = "1.8.2", default-features = false }
+alloy-consensus = { version = "1.8.2", default-features = false }
+alloy-primitives = { version = "1.5.7", default-features = false }
 
 # gRPC / Protobuf
 tonic = "0.14.5"
