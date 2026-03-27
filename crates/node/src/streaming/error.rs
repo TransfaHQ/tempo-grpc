@@ -5,7 +5,7 @@ use tokio::{sync::mpsc::error::SendError, task::JoinError};
 use tonic::Status;
 
 #[derive(Error, Debug)]
-pub enum StreamingError {
+pub enum LiveError {
     #[error(transparent)]
     Codec(#[from] CodecError),
     #[error(transparent)]
@@ -16,8 +16,8 @@ pub enum StreamingError {
     BroadcastReceiverClosed,
 }
 
-impl From<StreamingError> for Status {
-    fn from(value: StreamingError) -> Self {
+impl From<LiveError> for Status {
+    fn from(value: LiveError) -> Self {
         Self::internal(value.to_string())
     }
 }
@@ -53,7 +53,7 @@ pub enum BackfillToLiveError {
     #[error(transparent)]
     Backfill(#[from] BackfillError),
     #[error(transparent)]
-    Live(#[from] StreamingError),
+    Live(#[from] LiveError),
 }
 
 impl From<BackfillToLiveError> for Status {

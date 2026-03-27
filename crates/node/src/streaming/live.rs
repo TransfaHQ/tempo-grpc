@@ -6,12 +6,12 @@ use tokio::sync::{
     mpsc,
 };
 
-use crate::streaming::error::StreamingError;
+use crate::streaming::error::LiveError;
 
 pub async fn live(
     sender: &mpsc::Sender<Result<proto::BlockChunk, tonic::Status>>,
     mut exex_notification_rx: broadcast::Receiver<ExExNotification<TempoPrimitives>>,
-) -> Result<(), StreamingError> {
+) -> Result<(), LiveError> {
     loop {
         match exex_notification_rx.recv().await {
             Ok(notification) => {
@@ -19,7 +19,7 @@ pub async fn live(
                 sender.send(Ok(proto::BlockChunk { items: blocks })).await?;
             }
             Err(RecvError::Lagged(n)) => {
-                return Err(StreamingError::BroadcastReceiverLagged(n));
+                return Err(LiveError::BroadcastReceiverLagged(n));
             }
             Err(RecvError::Closed) => {
                 return Ok(());
@@ -30,7 +30,7 @@ pub async fn live(
 
 pub(super) fn process_exex_notification(
     notification: &ExExNotification<TempoPrimitives>,
-) -> Result<Vec<proto::Block>, StreamingError> {
+) -> Result<Vec<proto::Block>, LiveError> {
     let blocks = match notification {
         ExExNotification::ChainCommitted { new } => {
             chain_to_rpc_blocks(&new, proto::BlockStatus::Committed)
