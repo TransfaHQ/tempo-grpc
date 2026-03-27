@@ -88,12 +88,12 @@ pub async fn backfill_to_live(
                 if start == from {
                     let blocks = chain_to_rpc_blocks(&chain, proto::BlockStatus::Committed)
                         .map_err(BackfillError::from)?;
-                    if !blocks.is_empty() {
-                        sender
-                            .send(Ok(proto::BlockChunk { items: blocks }))
-                            .await
-                            .map_err(BackfillError::from)?;
-                    }
+
+                    sender
+                        .send(Ok(proto::BlockChunk { items: blocks }))
+                        .await
+                        .map_err(BackfillError::from)?;
+
                     live(sender, exex_notification_rx).await?;
                     return Ok(());
                 }
