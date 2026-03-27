@@ -97,7 +97,6 @@ message Receipt {
 enum BlockStatus {
   COMMITTED = 0;
   REORGED = 1;
-  REVERTED = 2;
 }
 
 message Withdrawals {
