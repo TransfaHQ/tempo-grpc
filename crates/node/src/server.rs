@@ -6,7 +6,7 @@ use reth::{
 };
 use reth_ethereum::provider::db::DatabaseEnv;
 use reth_exex::ExExNotification;
-use shared::proto::{self, SubscribeRequest, block_stream_server::BlockStream};
+use shared::proto::{self, LiveRequest, block_stream_server::BlockStream};
 use tempo_node::node::TempoNode;
 use tempo_primitives::TempoPrimitives;
 use tokio::sync::{
@@ -40,14 +40,14 @@ impl<N: FullNodeComponents> BlockStreamService<N> {
 
 #[tonic::async_trait]
 impl BlockStream for BlockStreamService<TempoNodeAdapter> {
-    type SubscribeStream = ReceiverStream<Result<proto::BlockChunk, Status>>;
+    type LiveStream = ReceiverStream<Result<proto::BlockChunk, Status>>;
     type BackfillStream = ReceiverStream<Result<proto::BlockChunk, Status>>;
     type BackfillToLiveStream = ReceiverStream<Result<proto::BlockChunk, Status>>;
 
-    async fn subscribe(
+    async fn live(
         &self,
-        _request: Request<SubscribeRequest>,
-    ) -> Result<Response<Self::SubscribeStream>, Status> {
+        _request: Request<LiveRequest>,
+    ) -> Result<Response<Self::LiveStream>, Status> {
         let (tx, rx) = mpsc::channel(128);
         let exex_receiver = self.exex_notifications.subscribe();
 
