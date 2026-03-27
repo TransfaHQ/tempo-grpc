@@ -9,13 +9,11 @@ pub enum StreamingError {
     #[error(transparent)]
     Codec(#[from] CodecError),
     #[error(transparent)]
-    ChannelClosed(#[from] SendError<proto::BlockChunk>),
+    ChannelClosed(#[from] SendError<Result<proto::BlockChunk, tonic::Status>>),
     #[error("receiver lagged by {0} messages")]
     BroadcastReceiverLagged(u64),
     #[error("receiver closed")]
     BroadcastReceiverClosed,
-    #[error(transparent)]
-    BackfillError(#[from] BackfillError),
 }
 
 impl From<StreamingError> for Status {
@@ -37,7 +35,7 @@ pub enum BackfillError {
     #[error(transparent)]
     JoinError(#[from] JoinError),
     #[error(transparent)]
-    ChannelClosed(#[from] SendError<proto::BlockChunk>),
+    ChannelClosed(#[from] SendError<Result<proto::BlockChunk, tonic::Status>>),
 }
 
 impl From<BackfillError> for Status {

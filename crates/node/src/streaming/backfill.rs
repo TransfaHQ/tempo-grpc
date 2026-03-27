@@ -18,7 +18,7 @@ use crate::streaming::error::BackfillError;
 pub type TempoRethProvider = BlockchainProvider<NodeTypesWithDBAdapter<TempoNode, DatabaseEnv>>;
 
 pub async fn backfill(
-    sender: &mpsc::Sender<proto::BlockChunk>,
+    sender: &mpsc::Sender<Result<proto::BlockChunk, tonic::Status>>,
     request: proto::BackfillRequest,
     provider: &Arc<TempoRethProvider>,
 ) -> Result<(), BackfillError> {
@@ -46,13 +46,13 @@ pub async fn backfill(
 
     while let Some(result) = stream.next().await {
         let blocks = result??;
-        sender.send(proto::BlockChunk { items: blocks }).await?;
+        sender.send(Ok(proto::BlockChunk { items: blocks })).await?;
     }
     Ok(())
 }
 
 pub async fn backfill_to_live(
-    sender: &mpsc::Sender<proto::BlockChunk>,
+    sender: &mpsc::Sender<Result<proto::BlockChunk, tonic::Status>>,
     request: proto::BackfillToLiveRequest,
     mut exex_notification_rx: broadcast::Receiver<ExExNotification<TempoPrimitives>>,
     provider: &Arc<TempoRethProvider>,

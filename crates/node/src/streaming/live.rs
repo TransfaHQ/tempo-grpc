@@ -9,14 +9,14 @@ use tokio::sync::{
 use crate::streaming::error::StreamingError;
 
 pub async fn live(
-    sender: mpsc::Sender<proto::BlockChunk>,
+    sender: &mpsc::Sender<Result<proto::BlockChunk, tonic::Status>>,
     mut exex_notification_rx: broadcast::Receiver<ExExNotification<TempoPrimitives>>,
 ) -> Result<(), StreamingError> {
     loop {
         match exex_notification_rx.recv().await {
             Ok(notification) => {
                 let blocks = process_exex_notification(&notification)?;
-                sender.send(proto::BlockChunk { items: blocks }).await?;
+                sender.send(Ok(proto::BlockChunk { items: blocks })).await?;
             }
             Err(RecvError::Lagged(n)) => {
                 return Err(StreamingError::BroadcastReceiverLagged(n));

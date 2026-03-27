@@ -48,26 +48,16 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
         &self,
         _request: Request<SubscribeRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
-        let (tx, mut rx) = mpsc::channel(32);
-        let (response_tx, response_rx) = mpsc::channel(32);
-        let receiver = self.exex_notifications.subscribe();
+        let (tx, rx) = mpsc::channel(128);
+        let exex_receiver = self.exex_notifications.subscribe();
 
-        let response_tx = Arc::new(response_tx);
-        let response_tx_clone = Arc::clone(&response_tx);
         tokio::spawn(async move {
-            if let Err(e) = streaming::live(tx, receiver).await {
-                let _ = response_tx_clone.send(Err(e.into())).await;
+            if let Err(e) = streaming::live(&tx, exex_receiver).await {
+                let _ = tx.send(Err(e.into())).await;
             }
         });
 
-        tokio::spawn(async move {
-            while let Some(chunk) = rx.recv().await {
-                if response_tx.send(Ok(chunk)).await.is_err() {
-                    return;
-                }
-            }
-        });
-        Ok(Response::new(ReceiverStream::new(response_rx)))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 
     async fn backfill(
@@ -75,25 +65,14 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
         request: Request<proto::BackfillRequest>,
     ) -> Result<Response<Self::BackfillStream>, Status> {
         let message = request.into_inner();
-        let (tx, mut rx) = mpsc::channel(32);
-        let (response_tx, response_rx) = mpsc::channel(32);
-
-        let response_tx = Arc::new(response_tx);
-        let response_tx_clone = Arc::clone(&response_tx);
+        let (tx, rx) = mpsc::channel(128);
         let provider = Arc::clone(&self.provider);
         tokio::spawn(async move {
             if let Err(e) = streaming::backfill(&tx, message, &provider).await {
-                let _ = response_tx_clone.send(Err(e.into())).await;
+                let _ = tx.send(Err(e.into())).await;
             }
         });
-        tokio::spawn(async move {
-            while let Some(blocks) = rx.recv().await {
-                if response_tx.send(Ok(blocks)).await.is_err() {
-                    return;
-                }
-            }
-        });
-        Ok(Response::new(ReceiverStream::new(response_rx)))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 
     async fn backfill_to_live(
@@ -101,25 +80,17 @@ impl BlockStream for BlockStreamService<TempoNodeAdapter> {
         request: Request<proto::BackfillToLiveRequest>,
     ) -> Result<Response<Self::BackfillToLiveStream>, Status> {
         let message = request.into_inner();
-        let (tx, mut rx) = mpsc::channel(32);
-        let (response_tx, response_rx) = mpsc::channel(32);
-        let receiver = self.exex_notifications.subscribe();
+        let (tx, rx) = mpsc::channel(128);
+        let exex_receiver = self.exex_notifications.subscribe();
 
-        let response_tx = Arc::new(response_tx);
-        let response_tx_clone = Arc::clone(&response_tx);
         let provider = Arc::clone(&self.provider);
         tokio::spawn(async move {
-            if let Err(e) = streaming::backfill_to_live(&tx, message, receiver, &provider).await {
-                let _ = response_tx_clone.send(Err(e.into())).await;
+            if let Err(e) =
+                streaming::backfill_to_live(&tx, message, exex_receiver, &provider).await
+            {
+                let _ = tx.send(Err(e.into())).await;
             }
         });
-        tokio::spawn(async move {
-            while let Some(blocks) = rx.recv().await {
-                if response_tx.send(Ok(blocks)).await.is_err() {
-                    return;
-                }
-            }
-        });
-        Ok(Response::new(ReceiverStream::new(response_rx)))
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
