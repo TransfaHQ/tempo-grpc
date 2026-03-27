@@ -28,7 +28,7 @@ pub async fn live(
     }
 }
 
-fn process_exex_notification(
+pub(super) fn process_exex_notification(
     notification: &ExExNotification<TempoPrimitives>,
 ) -> Result<Vec<proto::Block>, StreamingError> {
     let blocks = match notification {
@@ -41,7 +41,7 @@ fn process_exex_notification(
             reorged.and_then(|reorged| Ok(reorged.into_iter().chain(committed?).collect()))
         }
         ExExNotification::ChainReverted { old } => {
-            chain_to_rpc_blocks(&old, proto::BlockStatus::Reverted)
+            chain_to_rpc_blocks(&old, proto::BlockStatus::Reorged)
         }
     };
 

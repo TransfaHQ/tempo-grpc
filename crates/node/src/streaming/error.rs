@@ -47,3 +47,20 @@ impl From<BackfillError> for Status {
         }
     }
 }
+
+#[derive(Error, Debug)]
+pub enum BackfillToLiveError {
+    #[error(transparent)]
+    Backfill(#[from] BackfillError),
+    #[error(transparent)]
+    Live(#[from] StreamingError),
+}
+
+impl From<BackfillToLiveError> for Status {
+    fn from(value: BackfillToLiveError) -> Self {
+        match value {
+            BackfillToLiveError::Backfill(e) => e.into(),
+            BackfillToLiveError::Live(e) => e.into(),
+        }
+    }
+}
