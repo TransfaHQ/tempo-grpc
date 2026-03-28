@@ -38,13 +38,13 @@ pub struct IndexerArgs {
     ch_url: String,
 
     #[arg(long)]
-    ch_password: String,
+    ch_password: Option<String>,
 
     #[arg(long)]
     ch_database: String,
 
     #[arg(long)]
-    ch_user: String,
+    ch_user: Option<String>,
 
     #[arg(long)]
     concurrency: u64,
@@ -63,9 +63,19 @@ impl Indexer {
     pub fn new(args: IndexerArgs, shutdown_token: CancellationToken) -> Self {
         let client = Client::default()
             .with_url(&args.ch_url)
-            .with_password(&args.ch_password)
-            .with_user(&args.ch_user)
             .with_database(&args.ch_database);
+        let client = if let Some(user) = &args.ch_user {
+            client.with_user(user)
+        } else {
+            client
+        };
+
+        let client = if let Some(password) = &args.ch_password {
+            client.with_password(password)
+        } else {
+            client
+        };
+
         Self {
             args,
             shutdown_token: Arc::new(shutdown_token),
@@ -102,7 +112,7 @@ impl Indexer {
             if let Some(to) = self.args.to {
                 let request = Request::new(BackfillRequest {
                     from: self.args.from,
-                    to: to,
+                    to,
                     size: self.args.batch_size,
                 });
                 client.backfill(request).await?
@@ -187,7 +197,7 @@ async fn insert_block_txs(
     let tx_rows = block
         .transactions
         .iter()
-        .map(|tx| txn_to_row(&block, tx))
+        .map(|tx| txn_to_row(block, tx))
         .collect::<Result<Vec<_>, _>>()?;
     for row in tx_rows {
         inserter.write(&row).await?;
@@ -211,7 +221,7 @@ async fn insert_block_logs(
         }
     }
     for (tx_index, tx_hash, log) in logs {
-        let row = log_to_row(&log, log_index, &block, tx_index, tx_hash)?;
+        let row = log_to_row(log, log_index, block, tx_index, tx_hash)?;
         inserter.write(&row).await?;
         log_index += 1;
     }
