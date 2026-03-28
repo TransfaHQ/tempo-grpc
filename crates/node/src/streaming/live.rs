@@ -33,15 +33,15 @@ pub(super) fn process_exex_notification(
 ) -> Result<Vec<proto::Block>, LiveError> {
     let blocks = match notification {
         ExExNotification::ChainCommitted { new } => {
-            chain_to_rpc_blocks(&new, proto::BlockStatus::Committed)
+            chain_to_rpc_blocks(new, proto::BlockStatus::Committed)
         }
         ExExNotification::ChainReorged { old, new } => {
-            let reorged = chain_to_rpc_blocks(&old, proto::BlockStatus::Reorged);
-            let committed = chain_to_rpc_blocks(&new, proto::BlockStatus::Committed);
+            let reorged = chain_to_rpc_blocks(old, proto::BlockStatus::Reorged);
+            let committed = chain_to_rpc_blocks(new, proto::BlockStatus::Committed);
             reorged.and_then(|reorged| Ok(reorged.into_iter().chain(committed?).collect()))
         }
         ExExNotification::ChainReverted { old } => {
-            chain_to_rpc_blocks(&old, proto::BlockStatus::Reorged)
+            chain_to_rpc_blocks(old, proto::BlockStatus::Reorged)
         }
     };
 

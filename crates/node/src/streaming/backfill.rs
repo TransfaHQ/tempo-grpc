@@ -42,7 +42,7 @@ pub async fn backfill(
 
     let mut stream = stream::iter(chunks)
         .map(|(start, end)| {
-            let provider = Arc::clone(&provider);
+            let provider = Arc::clone(provider);
             tokio::task::spawn_blocking(move || fetch_block_range(&provider, start..=end))
         })
         .buffered(16);
@@ -123,9 +123,9 @@ fn fetch_block_range(
     provider: &Arc<TempoRethProvider>,
     range: RangeInclusive<u64>,
 ) -> Result<Vec<proto::Block>, BackfillError> {
-    let blocks = provider.block_with_senders_range(range.clone().into())?;
+    let blocks = provider.block_with_senders_range(range.clone())?;
 
-    let block_receipts = provider.receipts_by_block_range(range.into())?;
+    let block_receipts = provider.receipts_by_block_range(range)?;
 
     let rpc_blocks = blocks
         .iter()
