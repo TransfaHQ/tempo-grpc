@@ -7,7 +7,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
-use tonic::transport::Server;
+use tonic::{codec::CompressionEncoding, transport::Server};
 
 use eyre::Context;
 use reth::{builder::WithLaunchContext, cli::NoSubCmd};
@@ -111,10 +111,14 @@ fn main() -> eyre::Result<()> {
         let provider = Arc::new(handle.node.provider().clone());
         let server = Server::builder()
             .add_service(reflection_service)
-            .add_service(BlockStreamServer::new(BlockStreamService::new(
-                notifications_tx.clone(),
-                provider.clone(),
-            )))
+            .add_service(
+                BlockStreamServer::new(BlockStreamService::new(
+                    notifications_tx.clone(),
+                    provider.clone(),
+                ))
+                .send_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd),
+            )
             .serve(SocketAddr::new(args.grpc_addr, args.grpc_port));
         handle
             .node

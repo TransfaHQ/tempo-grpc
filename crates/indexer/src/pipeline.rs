@@ -9,7 +9,7 @@ use shared::proto::{
 use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tonic::Request;
+use tonic::{Request, codec::CompressionEncoding};
 use tracing::{debug, info};
 
 use crate::{
@@ -97,7 +97,9 @@ impl Indexer {
         let grpc_url = self.args.grpc_url.clone();
         let mut client = BlockStreamClient::connect(grpc_url)
             .await?
-            .max_decoding_message_size(usize::MAX);
+            .max_decoding_message_size(usize::MAX)
+            .send_compressed(CompressionEncoding::Zstd)
+            .accept_compressed(CompressionEncoding::Zstd);
         let response = {
             if let Some(to) = self.args.to {
                 let request = Request::new(BackfillRequest {

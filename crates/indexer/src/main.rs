@@ -22,7 +22,7 @@ async fn main() -> eyre::Result<()> {
     tokio::select! {
         res = indexer.start() => {
             if let Err(err) = res {
-                error!("Indexing pipeline failed: {:#}", err);
+                error!("Indexing pipeline failed: {:?}", err);
             } else {
                 info!("Done in {}", start.elapsed().as_millis());
             }
