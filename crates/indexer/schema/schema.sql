@@ -1,5 +1,4 @@
-
-CREATE TABLE IF NOT EXISTS moderato.blocks
+CREATE TABLE IF NOT EXISTS blocks
 (
     number UInt64 CODEC(Delta, ZSTD),
     hash FixedString(32) CODEC(ZSTD),
@@ -20,7 +19,7 @@ ORDER BY (number)
 PARTITION BY intDiv(number, 1000000)
 PRIMARY KEY (number);
 
-CREATE TABLE IF NOT EXISTS moderato.txs
+CREATE TABLE IF NOT EXISTS txs
 (
     hash FixedString(32) CODEC(ZSTD),
     block_number UInt64 CODEC(Delta, ZSTD),
@@ -43,7 +42,7 @@ ENGINE = ReplacingMergeTree(_version, is_deleted)
 ORDER BY (block_number, tx_index)
 PRIMARY KEY (block_number, tx_index);
 
-CREATE TABLE IF NOT EXISTS moderato.logs
+CREATE TABLE IF NOT EXISTS logs
 (
     block_number UInt64 CODEC(Delta, ZSTD),
     block_timestamp UInt64 CODEC(Delta, ZSTD),
