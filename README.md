@@ -73,7 +73,7 @@ tempo-grpc node \
 
 ### Running the indexer
 
-The repo includes a basic gRPC client that streams blocks from the server and inserts them into ClickHouse. It's mainly useful for testing and benchmarking the gRPC server. It requires a running ClickHouse instance.
+The repo includes a basic gRPC client that streams blocks from the server and inserts them into ClickHouse. It's mainly useful for testing and benchmarking the gRPC server. It requires a running ClickHouse instance with the schema from [`crates/indexer/schema/schema.sql`](crates/indexer/schema/schema.sql) applied.
 
 ```bash
 cargo run --release -p indexer -- \
